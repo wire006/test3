@@ -21,24 +21,34 @@ final class HapticManager {
             return
         }
         lastPlayedAt = Date()
-
-        // 段階的にハプティクスを再生して強く注意を促す。
-        let device = WKInterfaceDevice.current()
-        device.play(.notification)
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            device.play(.failure)
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
-            device.play(.retry)
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            device.play(.notification)
-        }
+        playAlertPattern()
     }
 
-    /// テスト用の単発振動。
+    /// テスト用の振動。
+    /// `.click` は微弱で体感しにくいため、実際の居眠りアラートと
+    /// 同じパターンを再生して強い振動を確認できるようにする。
+    /// クールダウン判定はスキップし、何度でも押せるようにする。
     func playTestTap() {
-        WKInterfaceDevice.current().play(.click)
+        playAlertPattern()
+    }
+
+    // MARK: - Private
+
+    /// 段階的にハプティクスを再生して強く注意を促す。
+    /// Taptic Engine 呼び出しは必ずメインスレッドから行う必要がある。
+    private func playAlertPattern() {
+        DispatchQueue.main.async {
+            let device = WKInterfaceDevice.current()
+            device.play(.notification)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            WKInterfaceDevice.current().play(.failure)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+            WKInterfaceDevice.current().play(.retry)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            WKInterfaceDevice.current().play(.notification)
+        }
     }
 }
