@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 居眠り検知に必要な権限 -->
+    <key>NSHealthShareUsageDescription</key>
+    <string>居眠り検知のため心拍数を利用します。</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>バックグラウンド実行のためワークアウトセッションを開始します。</string>
+    <key>NSMotionUsageDescription</key>
+    <string>居眠り検知のため手首の動き (加速度) を利用します。</string>
+    <key>NSHealthRequiredReadAuthorizationTypeIdentifiers</key>
+    <array>
+        <string>HKQuantityTypeIdentifierHeartRate</string>
+    </array>
+
+    <!-- watchOS バックグラウンド実行 -->
+    <key>WKBackgroundModes</key>
+    <array>
+        <string>workout-processing</string>
+    </array>
+
+    <!-- watchOS アプリ基本設定 -->
+    <key>WKWatchKitApp</key>
+    <true/>
+    <key>WKApplication</key>
+    <true/>
+    <key>WKRunsIndependentlyOfCompanionApp</key>
+    <true/>
+
+    <key>CFBundleDisplayName</key>
+    <string>居眠り防止</string>
+    <key>CFBundleName</key>
+    <string>DrowsinessWatch</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+</dict>
+</plist>
