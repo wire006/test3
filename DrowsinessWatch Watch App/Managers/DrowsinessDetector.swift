@@ -23,7 +23,6 @@ enum DetectionState: String {
     case drowsy = "居眠り検知!!"
 }
 
-@MainActor
 final class DrowsinessDetector: ObservableObject {
     // MARK: - 公開プロパティ
 
@@ -32,16 +31,18 @@ final class DrowsinessDetector: ObservableObject {
     @Published private(set) var baselineHeartRate: Double?
     @Published private(set) var activityLevel: Double = 0.0
     @Published private(set) var consecutiveDrowsySeconds: Int = 0
-    @Published var alertCount: Int = 0
-
-    /// 居眠り検知のための感度設定 (1.0 が既定)。値を大きくすると検知しやすい。
-    @Published var sensitivity: Double = 1.0
+    /// 現在のセッションでの発報回数。
+    @Published var sessionAlertCount: Int = 0
 
     // MARK: - 依存コンポーネント
+
+    let settings: SettingsStore
+    let history: AlertHistoryStore
 
     private let healthKit = HealthKitManager()
     private let motion = MotionManager()
     private let haptic = HapticManager()
+    private let workout = WorkoutSessionManager()
 
     // MARK: - 閾値
 
@@ -60,6 +61,16 @@ final class DrowsinessDetector: ObservableObject {
     private var recentHeartRates: [Double] = []
     private let baselineWindow = 120
 
+    // MARK: - イニシャライザ
+
+    init(
+        settings: SettingsStore = SettingsStore(),
+        history: AlertHistoryStore = AlertHistoryStore()
+    ) {
+        self.settings = settings
+        self.history = history
+    }
+
     // MARK: - ライフサイクル
 
     /// 監視を開始する。UI の "スタート" ボタンから呼び出す。
@@ -68,6 +79,11 @@ final class DrowsinessDetector: ObservableObject {
 
         healthKit.requestAuthorization()
         motion.start()
+
+        // バックグラウンド安定化のためワークアウトセッションを開始する。
+        if settings.useWorkoutSession {
+            workout.start()
+        }
 
         // HealthKit / Motion の値を自身の @Published にブリッジ。
         healthKit.$currentHeartRate
@@ -84,13 +100,13 @@ final class DrowsinessDetector: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // 1 秒ごとに居眠り条件を評価する。
+        // 1 秒ごとに居眠り条件を評価する。Timer は main run loop で回るので
+        // UI 側の @Published の更新は main thread から安全に行える。
         monitoringTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.evaluateDrowsiness()
-            }
+            self?.evaluateDrowsiness()
         }
 
+        sessionAlertCount = 0
         state = .monitoring
     }
 
@@ -101,6 +117,9 @@ final class DrowsinessDetector: ObservableObject {
         cancellables.removeAll()
         healthKit.stopHeartRateStreaming()
         motion.stop()
+        if settings.useWorkoutSession {
+            workout.stop()
+        }
         recentHeartRates.removeAll()
         consecutiveDrowsySeconds = 0
         state = .idle
@@ -135,12 +154,12 @@ final class DrowsinessDetector: ObservableObject {
         // 条件 1: 心拍数がベースラインから一定割合下がっている。
         let heartRateDropDetected: Bool = {
             guard let hr = heartRate, let base = baselineHeartRate else { return false }
-            let dynamicRatio = heartRateDropRatio / max(sensitivity, 0.1)
+            let dynamicRatio = heartRateDropRatio / max(settings.sensitivity, 0.1)
             return hr < base * (1.0 - dynamicRatio)
         }()
 
         // 条件 2: 腕の動きがほぼ無い。
-        let dynamicStillnessThreshold = stillnessActivityThreshold * sensitivity
+        let dynamicStillnessThreshold = stillnessActivityThreshold * settings.sensitivity
         let isStill = activityLevel < dynamicStillnessThreshold
 
         if heartRateDropDetected && isStill {
@@ -159,7 +178,16 @@ final class DrowsinessDetector: ObservableObject {
 
     private func triggerAlert() {
         state = .drowsy
-        alertCount += 1
+        sessionAlertCount += 1
+        settings.totalAlertCount += 1
+
+        history.append(AlertRecord(
+            triggeredAt: Date(),
+            heartRate: heartRate,
+            baselineHeartRate: baselineHeartRate,
+            activityLevel: activityLevel
+        ))
+
         haptic.playDrowsinessAlert()
         // 連続検知を一旦リセットして、クールダウン中に誤爆させない。
         consecutiveDrowsySeconds = 0
