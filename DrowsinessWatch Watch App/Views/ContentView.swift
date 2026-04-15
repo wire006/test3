@@ -23,6 +23,8 @@ struct ContentView: View {
 
                 sensitivitySection
 
+                triggerSecondsSection
+
                 primaryActionButton
 
                 HStack(spacing: 6) {
@@ -104,6 +106,24 @@ struct ContentView: View {
             Text("感度: \(String(format: "%.1f", settings.sensitivity))")
                 .font(.caption2)
             Slider(value: $settings.sensitivity, in: 0.5...2.0, step: 0.1)
+        }
+    }
+
+    /// 居眠り判定までの連続秒数を 1 〜 30 秒で調整するセクション。
+    private var triggerSecondsSection: some View {
+        Stepper(
+            value: $settings.drowsyTriggerSeconds,
+            in: 1...30,
+            step: 1
+        ) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("判定秒数")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text("\(settings.drowsyTriggerSeconds) 秒")
+                    .font(.caption)
+                    .monospacedDigit()
+            }
         }
     }
 

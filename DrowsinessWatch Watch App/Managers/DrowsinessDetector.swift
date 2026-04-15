@@ -50,8 +50,8 @@ final class DrowsinessDetector: ObservableObject {
     private let heartRateDropRatio: Double = 0.12
     /// 活動量 RMS がこの値以下なら静止とみなす。
     private let stillnessActivityThreshold: Double = 0.03
-    /// 連続でこの秒数、眠気条件を満たしたら居眠りと判定する。
-    private let drowsyTriggerSeconds: Int = 30
+    // 連続でこの秒数、眠気条件を満たしたら居眠りと判定する。
+    // 値は SettingsStore.drowsyTriggerSeconds (1 〜 30 秒) から取得する。
 
     // MARK: - 内部状態
 
@@ -171,7 +171,7 @@ final class DrowsinessDetector: ObservableObject {
             }
         }
 
-        if consecutiveDrowsySeconds >= drowsyTriggerSeconds {
+        if consecutiveDrowsySeconds >= settings.drowsyTriggerSeconds {
             triggerAlert()
         }
     }

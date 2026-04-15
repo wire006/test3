@@ -14,6 +14,7 @@ final class SettingsStore: ObservableObject {
         static let sensitivity = "settings.sensitivity"
         static let totalAlertCount = "settings.totalAlertCount"
         static let useWorkoutSession = "settings.useWorkoutSession"
+        static let drowsyTriggerSeconds = "settings.drowsyTriggerSeconds"
     }
 
     private let defaults: UserDefaults
@@ -33,6 +34,19 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(useWorkoutSession, forKey: Keys.useWorkoutSession) }
     }
 
+    /// 居眠りと判定するまでの連続静止秒数 (1 〜 30 秒)。
+    /// 小さいほど反応が速くなる反面、誤検知が増える。
+    @Published var drowsyTriggerSeconds: Int {
+        didSet {
+            let clamped = max(1, min(30, drowsyTriggerSeconds))
+            if clamped != drowsyTriggerSeconds {
+                drowsyTriggerSeconds = clamped
+                return
+            }
+            defaults.set(clamped, forKey: Keys.drowsyTriggerSeconds)
+        }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
@@ -43,10 +57,15 @@ final class SettingsStore: ObservableObject {
         if defaults.object(forKey: Keys.useWorkoutSession) == nil {
             defaults.set(true, forKey: Keys.useWorkoutSession)
         }
+        if defaults.object(forKey: Keys.drowsyTriggerSeconds) == nil {
+            defaults.set(30, forKey: Keys.drowsyTriggerSeconds)
+        }
 
         self.sensitivity = defaults.double(forKey: Keys.sensitivity)
         self.totalAlertCount = defaults.integer(forKey: Keys.totalAlertCount)
         self.useWorkoutSession = defaults.bool(forKey: Keys.useWorkoutSession)
+        let storedTrigger = defaults.integer(forKey: Keys.drowsyTriggerSeconds)
+        self.drowsyTriggerSeconds = max(1, min(30, storedTrigger))
     }
 
     /// 累積発報回数をリセットする。
