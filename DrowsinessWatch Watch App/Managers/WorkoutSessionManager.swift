@@ -47,7 +47,12 @@ final class WorkoutSessionManager: NSObject {
         do {
             let session = try HKWorkoutSession(healthStore: healthStore, configuration: config)
             let builder = session.associatedWorkoutBuilder()
-            builder.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: config)
+            let dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: config)
+            // `.other` アクティビティではデフォルトで心拍が自動収集されないことが
+            // あるため、明示的に enable しておく。これが無いと
+            // workoutBuilder(_:didCollectDataOf:) に heartRateType が届かない。
+            dataSource.enableCollection(for: heartRateType, predicate: nil)
+            builder.dataSource = dataSource
 
             session.delegate = self
             builder.delegate = self

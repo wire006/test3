@@ -26,8 +26,11 @@ final class HealthKitManager: NSObject, ObservableObject {
     /// 心拍数ストリーミングも開始する。
     /// - Note: ワークアウトモードでは HKLiveWorkoutBuilder から心拍を拾うため、
     ///         認可のみ取って AnchoredObjectQuery は起動しない運用にする。
+    ///         その際、HKWorkoutSession を作成するには **HKWorkoutType の
+    ///         share 権限** が必須。share を要求しないと HKLiveWorkoutBuilder
+    ///         が心拍サンプルを収集できず、`didCollectDataOf` が一度も呼ばれない。
     /// - Parameter onAuthorized: 認可完了 (成功/失敗問わず main thread) で呼ばれる。
-    ///   主に基準値の履歴シード処理をキックするために利用する。
+    ///   主に基準値の履歴シード処理やワークアウトセッション開始をキックするために利用する。
     func requestAuthorization(
         startStreaming: Bool = true,
         onAuthorized: (() -> Void)? = nil
@@ -38,7 +41,10 @@ final class HealthKitManager: NSObject, ObservableObject {
         }
 
         let readTypes: Set<HKObjectType> = [heartRateType]
-        healthStore.requestAuthorization(toShare: [], read: readTypes) { [weak self] success, _ in
+        // ワークアウトモード (HKWorkoutSession) の利用に必須の share 権限。
+        // 他モードでは使われないが、含めても副作用は無い。
+        let shareTypes: Set<HKSampleType> = [HKObjectType.workoutType()]
+        healthStore.requestAuthorization(toShare: shareTypes, read: readTypes) { [weak self] success, _ in
             DispatchQueue.main.async {
                 self?.isAuthorized = success
                 if success && startStreaming {

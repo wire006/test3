@@ -125,13 +125,19 @@ final class DrowsinessDetector: ObservableObject {
         case .workout:
             // ワークアウトセッション経由で心拍を受ける。認可のみ取って
             // AnchoredObjectQuery は起動しない (重複防止)。
-            healthKit.requestAuthorization(startStreaming: false) { [weak self] in
-                self?.seedBaselineFromHistory()
-            }
+            //
+            // 注意: HKWorkoutSession の開始は **必ず認可完了後** に行う。
+            // 認可前に start() を呼ぶと share 権限が確定しておらず、
+            // HKLiveWorkoutBuilder が心拍サンプルを収集しない
+            // (didCollectDataOf が一度も呼ばれない) ケースが発生する。
             workout.onHeartRate = { [weak self] bpm in
                 self?.handleHeartRateUpdate(bpm)
             }
-            workout.start()
+            healthKit.requestAuthorization(startStreaming: false) { [weak self] in
+                guard let self else { return }
+                self.seedBaselineFromHistory()
+                self.workout.start()
+            }
         }
 
         // 初期評価間隔で Timer をスケジュール。以後 adaptCadence() で張り替える。
