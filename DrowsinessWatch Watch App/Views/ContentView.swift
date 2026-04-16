@@ -35,19 +35,12 @@ struct ContentView: View {
 
                 primaryActionButton
 
-                HStack(spacing: 6) {
-                    NavigationLink(destination: HistoryView(store: history)) {
-                        Label("履歴", systemImage: "list.bullet.rectangle")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button(action: { detector.playTestHaptic() }) {
-                        Label("振動", systemImage: "waveform")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
+                NavigationLink(destination: HistoryView(store: history)) {
+                    Label("履歴", systemImage: "list.bullet.rectangle")
+                        .font(.caption)
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.bordered)
 
                 backgroundModeSection
 

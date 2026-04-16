@@ -169,11 +169,6 @@ final class DrowsinessDetector: ObservableObject {
         state = .idle
     }
 
-    /// 手動で振動テストを行う。
-    func playTestHaptic() {
-        haptic.playTestTap()
-    }
-
     // MARK: - バインディング
 
     private func bindHealthKitHeartRateStream() {
