@@ -56,13 +56,11 @@ final class DrowsinessDetector: ObservableObject {
     private let workout = WorkoutSessionManager()
 
     // MARK: - 閾値
-
-    /// 心拍数がベースラインから何割下がったら眠気シグナルとみなすか。
-    private let heartRateDropRatio: Double = 0.12
-    /// 活動量 RMS がこの値以下なら静止とみなす。
-    private let stillnessActivityThreshold: Double = 0.03
-    // 連続でこの秒数、眠気条件を満たしたら居眠りと判定する。
-    // 値は SettingsStore.drowsyTriggerSeconds (1 〜 30 秒) から取得する。
+    //
+    // 判定に使う 3 種類の閾値は全てユーザー設定 (SettingsStore) から取得する。
+    //  - 心拍低下率        : settings.heartRateDropThreshold     (0.06 〜 0.24)
+    //  - 静止活動量        : settings.stillnessActivityThreshold (0.01 〜 0.30 m/s²)
+    //  - 連続検知秒数      : settings.drowsyTriggerSeconds       (1   〜 30 秒)
 
     // MARK: - 内部状態
 
@@ -253,13 +251,11 @@ final class DrowsinessDetector: ObservableObject {
         // 条件 1: 心拍数がベースラインから一定割合下がっている。
         let heartRateDropDetected: Bool = {
             guard let hr = heartRate, let base = baselineHeartRate else { return false }
-            let dynamicRatio = heartRateDropRatio / max(settings.sensitivity, 0.1)
-            return hr < base * (1.0 - dynamicRatio)
+            return hr < base * (1.0 - settings.heartRateDropThreshold)
         }()
 
         // 条件 2: 腕の動きがほぼ無い。
-        let dynamicStillnessThreshold = stillnessActivityThreshold * settings.sensitivity
-        let isStill = activityLevel < dynamicStillnessThreshold
+        let isStill = activityLevel < settings.stillnessActivityThreshold
 
         if heartRateDropDetected && isStill {
             if drowsyConditionStartedAt == nil {
@@ -342,7 +338,7 @@ final class DrowsinessDetector: ObservableObject {
 
         let base = baselineHeartRate
         let hrRatio = base.map { hr / $0 } ?? 1.0
-        let isActive = activityLevel > stillnessActivityThreshold * 2
+        let isActive = activityLevel > settings.stillnessActivityThreshold * 2
 
         let chosen: (TimeInterval, Double)
         switch (hrRatio, isActive) {

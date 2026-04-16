@@ -3,7 +3,7 @@
 //  DrowsinessWatch Watch App
 //
 //  ユーザー設定と累積アラート回数を UserDefaults に永続化する。
-//  アプリ再起動後も感度や累計発報数を引き継げるようにする。
+//  アプリ再起動後も閾値 (心拍低下率 / 静止活動量) や累計発報数を引き継げるようにする。
 //
 
 import Foundation
@@ -43,12 +43,15 @@ enum BackgroundMode: String, CaseIterable, Identifiable {
 
 final class SettingsStore: ObservableObject {
     private enum Keys {
-        static let sensitivity = "settings.sensitivity"
+        static let heartRateDropThreshold = "settings.heartRateDropThreshold"
+        static let stillnessActivityThreshold = "settings.stillnessActivityThreshold"
         static let totalAlertCount = "settings.totalAlertCount"
         static let backgroundMode = "settings.backgroundMode"
         // 旧キー (移行用)
-        //  - useBackgroundSession: Bool — WKExtendedRuntimeSession 利用フラグだった
-        //  - useWorkoutSession    : Bool — さらに旧、HKWorkoutSession 利用フラグだった
+        //  - sensitivity          : Double — 心拍低下率と静止閾値を一括調整していた単一感度
+        //  - useBackgroundSession : Bool   — WKExtendedRuntimeSession 利用フラグだった
+        //  - useWorkoutSession    : Bool   — さらに旧、HKWorkoutSession 利用フラグだった
+        static let legacySensitivity = "settings.sensitivity"
         static let legacyUseBackgroundSession = "settings.useBackgroundSession"
         static let legacyUseWorkoutSession = "settings.useWorkoutSession"
         static let drowsyTriggerSeconds = "settings.drowsyTriggerSeconds"
@@ -58,9 +61,32 @@ final class SettingsStore: ObservableObject {
 
     private let defaults: UserDefaults
 
-    /// 居眠り検知の感度 (0.5 〜 2.0)。
-    @Published var sensitivity: Double {
-        didSet { defaults.set(sensitivity, forKey: Keys.sensitivity) }
+    /// 心拍低下率の閾値 (0.06 = 6% 〜 0.24 = 24%、既定 0.12 = 12%)。
+    /// ベースラインに対して現在の心拍がこの割合以上低下したら眠気シグナルとみなす。
+    /// 値を小さくすると敏感、大きくすると鈍感になる。
+    @Published var heartRateDropThreshold: Double {
+        didSet {
+            let clamped = max(0.06, min(0.24, heartRateDropThreshold))
+            if abs(clamped - heartRateDropThreshold) > 1e-9 {
+                heartRateDropThreshold = clamped
+                return
+            }
+            defaults.set(clamped, forKey: Keys.heartRateDropThreshold)
+        }
+    }
+
+    /// 静止判定の活動量閾値 (m/s² 単位、0.01 〜 0.30、既定 0.03)。
+    /// 加速度 RMS がこの値以下なら静止とみなす。
+    /// 値を小さくするとより厳密な静止を要求、大きくすると微動でも発火する。
+    @Published var stillnessActivityThreshold: Double {
+        didSet {
+            let clamped = max(0.01, min(0.30, stillnessActivityThreshold))
+            if abs(clamped - stillnessActivityThreshold) > 1e-9 {
+                stillnessActivityThreshold = clamped
+                return
+            }
+            defaults.set(clamped, forKey: Keys.stillnessActivityThreshold)
+        }
     }
 
     /// インストール以来の累積発報回数。
@@ -109,8 +135,26 @@ final class SettingsStore: ObservableObject {
         self.defaults = defaults
 
         // 初回起動時は既定値を書き込む。
-        if defaults.object(forKey: Keys.sensitivity) == nil {
-            defaults.set(1.0, forKey: Keys.sensitivity)
+        // 旧単一感度 `settings.sensitivity` が残っていれば、心拍低下率 =
+        // 0.12 / sensitivity、静止閾値 = 0.03 * sensitivity にマップして
+        // 既存ユーザーの体感を極力維持する。新規インストールは既定値。
+        if defaults.object(forKey: Keys.heartRateDropThreshold) == nil {
+            let migrated: Double
+            if let legacy = defaults.object(forKey: Keys.legacySensitivity) as? Double, legacy > 0 {
+                migrated = max(0.06, min(0.24, 0.12 / legacy))
+            } else {
+                migrated = 0.12
+            }
+            defaults.set(migrated, forKey: Keys.heartRateDropThreshold)
+        }
+        if defaults.object(forKey: Keys.stillnessActivityThreshold) == nil {
+            let migrated: Double
+            if let legacy = defaults.object(forKey: Keys.legacySensitivity) as? Double, legacy > 0 {
+                migrated = max(0.01, min(0.30, 0.03 * legacy))
+            } else {
+                migrated = 0.03
+            }
+            defaults.set(migrated, forKey: Keys.stillnessActivityThreshold)
         }
         if defaults.object(forKey: Keys.backgroundMode) == nil {
             // 旧キーからの移行ロジック:
@@ -139,7 +183,10 @@ final class SettingsStore: ObservableObject {
             defaults.set(70, forKey: Keys.debugHeartRate)
         }
 
-        self.sensitivity = defaults.double(forKey: Keys.sensitivity)
+        let storedHRDrop = defaults.double(forKey: Keys.heartRateDropThreshold)
+        self.heartRateDropThreshold = max(0.06, min(0.24, storedHRDrop == 0 ? 0.12 : storedHRDrop))
+        let storedStillness = defaults.double(forKey: Keys.stillnessActivityThreshold)
+        self.stillnessActivityThreshold = max(0.01, min(0.30, storedStillness == 0 ? 0.03 : storedStillness))
         self.totalAlertCount = defaults.integer(forKey: Keys.totalAlertCount)
         let raw = defaults.string(forKey: Keys.backgroundMode) ?? BackgroundMode.off.rawValue
         self.backgroundMode = BackgroundMode(rawValue: raw) ?? .off

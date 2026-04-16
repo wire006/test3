@@ -21,7 +21,9 @@ struct ContentView: View {
 
                 Divider()
 
-                sensitivitySection
+                heartRateDropThresholdSection
+
+                stillnessThresholdSection
 
                 triggerSecondsSection
 
@@ -99,11 +101,25 @@ struct ContentView: View {
         .font(.footnote)
     }
 
-    private var sensitivitySection: some View {
+    /// 心拍低下率の閾値を調整するセクション。
+    /// ベースラインに対してこの割合以上の低下で「心拍低下」とみなす。
+    /// 小さいほど敏感 (少しの低下で発火)、大きいほど鈍感。
+    private var heartRateDropThresholdSection: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("感度: \(String(format: "%.1f", settings.sensitivity))")
+            Text("心拍低下率: \(String(format: "%.0f%%", settings.heartRateDropThreshold * 100))")
                 .font(.caption2)
-            Slider(value: $settings.sensitivity, in: 0.5...2.0, step: 0.1)
+            Slider(value: $settings.heartRateDropThreshold, in: 0.06...0.24, step: 0.01)
+        }
+    }
+
+    /// 静止判定の活動量閾値 (加速度 RMS) を調整するセクション。
+    /// 加速度 RMS がこの値以下なら「静止」とみなす。
+    /// 小さいほど厳密な静止を要求、大きいほど微動でも発火する。
+    private var stillnessThresholdSection: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("静止閾値: \(String(format: "%.2f m/s²", settings.stillnessActivityThreshold))")
+                .font(.caption2)
+            Slider(value: $settings.stillnessActivityThreshold, in: 0.01...0.30, step: 0.01)
         }
     }
 
