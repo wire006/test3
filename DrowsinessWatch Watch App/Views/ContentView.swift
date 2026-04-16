@@ -42,6 +42,8 @@ struct ContentView: View {
                 }
 
                 backgroundModeSection
+
+                debugHeartRateSection
             }
             .padding(.horizontal, 4)
         }
@@ -70,7 +72,7 @@ struct ContentView: View {
     private var metricsSection: some View {
         VStack(spacing: 4) {
             metricRow(
-                label: "心拍",
+                label: settings.debugHeartRateEnabled ? "心拍 (DEBUG)" : "心拍",
                 value: detector.heartRate.map { String(format: "%.0f bpm", $0) } ?? "--"
             )
             metricRow(
@@ -141,6 +143,38 @@ struct ContentView: View {
             Text(settings.backgroundMode.summary)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    /// デバッグモードのトグルと擬似心拍数の Stepper。
+    /// 実機での発報テストや UI 確認に使う。監視中でも切り替え可能。
+    private var debugHeartRateSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: $settings.debugHeartRateEnabled) {
+                Text("デバッグ心拍")
+                    .font(.caption2)
+            }
+
+            if settings.debugHeartRateEnabled {
+                Stepper(
+                    value: $settings.debugHeartRate,
+                    in: 50...100,
+                    step: 1
+                ) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("擬似心拍")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("\(settings.debugHeartRate) bpm")
+                            .font(.caption)
+                            .monospacedDigit()
+                    }
+                }
+
+                Text("実測心拍を無視して上記の値を使用")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
