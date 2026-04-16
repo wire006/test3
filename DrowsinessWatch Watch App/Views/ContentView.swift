@@ -41,8 +41,8 @@ struct ContentView: View {
                     .buttonStyle(.bordered)
                 }
 
-                Toggle(isOn: $settings.useWorkoutSession) {
-                    Text("バックグラウンド安定化")
+                Toggle(isOn: $settings.useBackgroundSession) {
+                    Text("バックグラウンド継続")
                         .font(.caption2)
                 }
                 .disabled(detector.state != .idle)

@@ -42,7 +42,7 @@ final class DrowsinessDetector: ObservableObject {
     private let healthKit = HealthKitManager()
     private let motion = MotionManager()
     private let haptic = HapticManager()
-    private let workout = WorkoutSessionManager()
+    private let runtimeSession = ExtendedRuntimeSessionManager()
 
     // MARK: - 閾値
 
@@ -80,9 +80,10 @@ final class DrowsinessDetector: ObservableObject {
         healthKit.requestAuthorization()
         motion.start()
 
-        // バックグラウンド安定化のためワークアウトセッションを開始する。
-        if settings.useWorkoutSession {
-            workout.start()
+        // バックグラウンド実行を安定させるため Extended Runtime Session を開始する。
+        // HKWorkoutSession と違い、時計画面から自動的にアプリに復帰しない。
+        if settings.useBackgroundSession {
+            runtimeSession.start()
         }
 
         // HealthKit / Motion の値を自身の @Published にブリッジ。
@@ -117,9 +118,7 @@ final class DrowsinessDetector: ObservableObject {
         cancellables.removeAll()
         healthKit.stopHeartRateStreaming()
         motion.stop()
-        if settings.useWorkoutSession {
-            workout.stop()
-        }
+        runtimeSession.stop()
         recentHeartRates.removeAll()
         consecutiveDrowsySeconds = 0
         state = .idle
