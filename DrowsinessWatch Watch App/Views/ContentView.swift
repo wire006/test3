@@ -21,25 +21,26 @@ struct ContentView: View {
 
                 Divider()
 
-                sensitivitySection
+                heartRateDropThresholdSection
+
+                stillnessThresholdSection
 
                 triggerSecondsSection
 
+                andModeSection
+
+                orModeSection
+
+                fixedBaselineSection
+
                 primaryActionButton
 
-                HStack(spacing: 6) {
-                    NavigationLink(destination: HistoryView(store: history)) {
-                        Label("履歴", systemImage: "list.bullet.rectangle")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button(action: { detector.playTestHaptic() }) {
-                        Label("振動", systemImage: "waveform")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
+                NavigationLink(destination: HistoryView(store: history)) {
+                    Label("履歴", systemImage: "list.bullet.rectangle")
+                        .font(.caption)
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.bordered)
 
                 backgroundModeSection
 
@@ -76,7 +77,7 @@ struct ContentView: View {
                 value: detector.heartRate.map { String(format: "%.0f bpm", $0) } ?? "--"
             )
             metricRow(
-                label: "基準",
+                label: settings.fixedBaselineEnabled ? "基準 (FIXED)" : "基準",
                 value: detector.baselineHeartRate.map { String(format: "%.0f bpm", $0) } ?? "--"
             )
             metricRow(
@@ -99,11 +100,25 @@ struct ContentView: View {
         .font(.footnote)
     }
 
-    private var sensitivitySection: some View {
+    /// 心拍低下率の閾値を調整するセクション。
+    /// ベースラインに対してこの割合以上の低下で「心拍低下」とみなす。
+    /// 小さいほど敏感 (少しの低下で発火)、大きいほど鈍感。
+    private var heartRateDropThresholdSection: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("感度: \(String(format: "%.1f", settings.sensitivity))")
+            Text("心拍低下率: \(String(format: "%.0f%%", settings.heartRateDropThreshold * 100))")
                 .font(.caption2)
-            Slider(value: $settings.sensitivity, in: 0.5...2.0, step: 0.1)
+            Slider(value: $settings.heartRateDropThreshold, in: 0.06...0.24, step: 0.01)
+        }
+    }
+
+    /// 静止判定の活動量閾値 (加速度 RMS) を調整するセクション。
+    /// 加速度 RMS がこの値以下なら「静止」とみなす。
+    /// 小さいほど厳密な静止を要求、大きいほど微動でも発火する。
+    private var stillnessThresholdSection: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("静止閾値: \(String(format: "%.2f m/s²", settings.stillnessActivityThreshold))")
+                .font(.caption2)
+            Slider(value: $settings.stillnessActivityThreshold, in: 0.01...0.30, step: 0.01)
         }
     }
 
@@ -121,6 +136,102 @@ struct ContentView: View {
                 Text("\(settings.drowsyTriggerSeconds) 秒")
                     .font(.caption)
                     .monospacedDigit()
+            }
+        }
+    }
+
+    /// AND モード: 既存の判定 (心拍低下 + 静止) に「現在心拍 ≤ 閾値」を
+    /// 追加で AND するセクション。低 HR レンジでのみ発動させたい場合に使う。
+    private var andModeSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: $settings.andModeEnabled) {
+                Text("AND モード")
+                    .font(.caption2)
+            }
+
+            if settings.andModeEnabled {
+                Stepper(
+                    value: $settings.andModeThreshold,
+                    in: 60...100,
+                    step: 1
+                ) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("上限心拍")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("\(settings.andModeThreshold) bpm 以下")
+                            .font(.caption)
+                            .monospacedDigit()
+                    }
+                }
+
+                Text("心拍が上限以下のときだけ既存判定を有効化")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// OR モード: 既存判定と独立に「現在心拍 ≤ 閾値」を連続秒数満たせば
+    /// 単独で発火するセクション。徐脈即アラート向け。
+    private var orModeSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: $settings.orModeEnabled) {
+                Text("OR モード")
+                    .font(.caption2)
+            }
+
+            if settings.orModeEnabled {
+                Stepper(
+                    value: $settings.orModeThreshold,
+                    in: 60...90,
+                    step: 1
+                ) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("上限心拍")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("\(settings.orModeThreshold) bpm 以下")
+                            .font(.caption)
+                            .monospacedDigit()
+                    }
+                }
+
+                Text("心拍が上限以下なら単独で居眠りと判定")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// 基準値固定モード: ベースラインを実測値の移動平均ではなく
+    /// 設定値に固定するセクション。監視中でも即時反映される。
+    private var fixedBaselineSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: $settings.fixedBaselineEnabled) {
+                Text("基準値固定")
+                    .font(.caption2)
+            }
+
+            if settings.fixedBaselineEnabled {
+                Stepper(
+                    value: $settings.fixedBaselineValue,
+                    in: 60...100,
+                    step: 1
+                ) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("基準")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("\(settings.fixedBaselineValue) bpm")
+                            .font(.caption)
+                            .monospacedDigit()
+                    }
+                }
+
+                Text("実測値を無視して上記を基準値に固定")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
     }

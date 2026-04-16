@@ -24,14 +24,6 @@ final class HapticManager {
         playAlertPattern()
     }
 
-    /// テスト用の振動。
-    /// `.click` は微弱で体感しにくいため、実際の居眠りアラートと
-    /// 同じパターンを再生して強い振動を確認できるようにする。
-    /// クールダウン判定はスキップし、何度でも押せるようにする。
-    func playTestTap() {
-        playAlertPattern()
-    }
-
     // MARK: - Private
 
     /// 段階的にハプティクスを再生して強く注意を促す。
