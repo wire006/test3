@@ -5,8 +5,6 @@
     <!-- 居眠り検知に必要な権限 -->
     <key>NSHealthShareUsageDescription</key>
     <string>居眠り検知のため心拍数を利用します。</string>
-    <key>NSHealthUpdateUsageDescription</key>
-    <string>バックグラウンド実行のためワークアウトセッションを開始します。</string>
     <key>NSMotionUsageDescription</key>
     <string>居眠り検知のため手首の動き (加速度) を利用します。</string>
     <key>NSHealthRequiredReadAuthorizationTypeIdentifiers</key>
@@ -14,11 +12,12 @@
         <string>HKQuantityTypeIdentifierHeartRate</string>
     </array>
 
-    <!-- watchOS バックグラウンド実行 -->
-    <key>WKBackgroundModes</key>
-    <array>
-        <string>workout-processing</string>
-    </array>
+    <!--
+        バックグラウンド実行について
+        - WKExtendedRuntimeSession は WKBackgroundModes の宣言は不要。
+        - HKWorkoutSession を使っていた頃は workout-processing を入れていたが、
+          時計画面からの自動復帰挙動を避けるため廃止。
+    -->
 
     <!-- watchOS アプリ基本設定 -->
     <key>WKWatchKitApp</key>

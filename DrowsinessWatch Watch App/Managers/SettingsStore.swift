@@ -13,7 +13,11 @@ final class SettingsStore: ObservableObject {
     private enum Keys {
         static let sensitivity = "settings.sensitivity"
         static let totalAlertCount = "settings.totalAlertCount"
-        static let useWorkoutSession = "settings.useWorkoutSession"
+        // 旧 "settings.useWorkoutSession" は HKWorkoutSession 利用フラグだったが、
+        // 時計画面からの自動復帰回避のため Extended Runtime Session に移行。
+        // 既存インストールの値を引き継げるよう、互換キーとして読み込みも行う。
+        static let useBackgroundSession = "settings.useBackgroundSession"
+        static let legacyUseWorkoutSession = "settings.useWorkoutSession"
         static let drowsyTriggerSeconds = "settings.drowsyTriggerSeconds"
     }
 
@@ -29,9 +33,9 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(totalAlertCount, forKey: Keys.totalAlertCount) }
     }
 
-    /// HKWorkoutSession を利用してバックグラウンド実行を安定化するか。
-    @Published var useWorkoutSession: Bool {
-        didSet { defaults.set(useWorkoutSession, forKey: Keys.useWorkoutSession) }
+    /// WKExtendedRuntimeSession を利用してバックグラウンド実行を安定化するか。
+    @Published var useBackgroundSession: Bool {
+        didSet { defaults.set(useBackgroundSession, forKey: Keys.useBackgroundSession) }
     }
 
     /// 居眠りと判定するまでの連続静止秒数 (1 〜 30 秒)。
@@ -54,8 +58,10 @@ final class SettingsStore: ObservableObject {
         if defaults.object(forKey: Keys.sensitivity) == nil {
             defaults.set(1.0, forKey: Keys.sensitivity)
         }
-        if defaults.object(forKey: Keys.useWorkoutSession) == nil {
-            defaults.set(true, forKey: Keys.useWorkoutSession)
+        if defaults.object(forKey: Keys.useBackgroundSession) == nil {
+            // 旧キーから移行、無ければ既定 true。
+            let legacy = defaults.object(forKey: Keys.legacyUseWorkoutSession) as? Bool ?? true
+            defaults.set(legacy, forKey: Keys.useBackgroundSession)
         }
         if defaults.object(forKey: Keys.drowsyTriggerSeconds) == nil {
             defaults.set(30, forKey: Keys.drowsyTriggerSeconds)
@@ -63,7 +69,7 @@ final class SettingsStore: ObservableObject {
 
         self.sensitivity = defaults.double(forKey: Keys.sensitivity)
         self.totalAlertCount = defaults.integer(forKey: Keys.totalAlertCount)
-        self.useWorkoutSession = defaults.bool(forKey: Keys.useWorkoutSession)
+        self.useBackgroundSession = defaults.bool(forKey: Keys.useBackgroundSession)
         let storedTrigger = defaults.integer(forKey: Keys.drowsyTriggerSeconds)
         self.drowsyTriggerSeconds = max(1, min(30, storedTrigger))
     }
