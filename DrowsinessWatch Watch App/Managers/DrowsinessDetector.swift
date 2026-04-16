@@ -143,6 +143,10 @@ final class DrowsinessDetector: ObservableObject {
 
         // デバッグ心拍設定の変更を監視。
         bindDebugHeartRate()
+        // 基準値固定モードのトグル / 固定値の変更を監視。
+        bindFixedBaseline()
+        // 起動直後に一度ベースラインを反映 (固定モード ON なら即設定値)。
+        recomputeBaseline()
 
         sessionAlertCount = 0
         state = .monitoring
@@ -188,14 +192,13 @@ final class DrowsinessDetector: ObservableObject {
 
         // 基準値は常に実測値から学習させる (デバッグモード時も維持)。
         // これにより、デバッグ HR を基準値より低く設定すれば居眠り判定を発火できる。
+        // モードオフ時に即座に動的ベースラインに戻れるよう、固定モード中も
+        // 実測の履歴は蓄積し続ける。
         recentHeartRates.append(value)
         if recentHeartRates.count > baselineWindow {
             recentHeartRates.removeFirst(recentHeartRates.count - baselineWindow)
         }
-        if recentHeartRates.count >= minSamplesForBaseline {
-            let sum = recentHeartRates.reduce(0, +)
-            baselineHeartRate = sum / Double(recentHeartRates.count)
-        }
+        recomputeBaseline()
 
         // 現在心拍はデバッグモード時は設定値で上書きし、判定ロジックに
         // 擬似心拍を供給する。
@@ -203,6 +206,18 @@ final class DrowsinessDetector: ObservableObject {
             heartRate = Double(settings.debugHeartRate)
         } else {
             heartRate = value
+        }
+    }
+
+    /// 固定モードの場合は設定値に固定し、そうでなければ移動平均で算出する。
+    /// `handleHeartRateUpdate` と、固定モードのトグル/値が変わったとき
+    /// (bindFixedBaseline) の両方から呼ばれる。
+    private func recomputeBaseline() {
+        if settings.fixedBaselineEnabled {
+            baselineHeartRate = Double(settings.fixedBaselineValue)
+        } else if recentHeartRates.count >= minSamplesForBaseline {
+            let sum = recentHeartRates.reduce(0, +)
+            baselineHeartRate = sum / Double(recentHeartRates.count)
         }
     }
 
@@ -224,8 +239,24 @@ final class DrowsinessDetector: ObservableObject {
         .store(in: &cancellables)
     }
 
+    /// 基準値固定モードのトグル / 固定値の変更を監視し、
+    /// `baselineHeartRate` を即座に反映する。
+    /// オフにした瞬間は、実測履歴から再計算して動的ベースラインに戻す。
+    private func bindFixedBaseline() {
+        Publishers.CombineLatest(
+            settings.$fixedBaselineEnabled,
+            settings.$fixedBaselineValue
+        )
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] _, _ in
+            self?.recomputeBaseline()
+        }
+        .store(in: &cancellables)
+    }
+
     /// 監視開始直後に、過去 30 分の心拍履歴から基準値を即座に立てる。
     /// HealthKit 認可が完了した後に呼ぶ想定。
+    /// 固定モード中でも履歴自体は蓄積する (モードオフ時に即時に動的ベースラインへ戻れるよう)。
     private func seedBaselineFromHistory() {
         healthKit.fetchRecentHeartRates(within: 30 * 60) { [weak self] bpms in
             guard let self, !bpms.isEmpty else { return }
@@ -235,10 +266,8 @@ final class DrowsinessDetector: ObservableObject {
             let combined = (bpms + self.recentHeartRates).suffix(self.baselineWindow)
             self.recentHeartRates = Array(combined)
 
-            if self.recentHeartRates.count >= self.minSamplesForBaseline {
-                let sum = self.recentHeartRates.reduce(0, +)
-                self.baselineHeartRate = sum / Double(self.recentHeartRates.count)
-            }
+            // 固定モードのときは設定値が優先される (recomputeBaseline の中で判定)。
+            self.recomputeBaseline()
         }
     }
 
@@ -257,7 +286,30 @@ final class DrowsinessDetector: ObservableObject {
         // 条件 2: 腕の動きがほぼ無い。
         let isStill = activityLevel < settings.stillnessActivityThreshold
 
-        if heartRateDropDetected && isStill {
+        // AND モード: 既存の判定に「現在心拍 ≤ 閾値」を追加で AND する。
+        //  - モード無効なら常に true (既存条件に影響しない)
+        //  - モード有効だが心拍未取得ならゲート不通過 (false) として発火を止める
+        let andModePasses: Bool = {
+            guard settings.andModeEnabled else { return true }
+            guard let hr = heartRate else { return false }
+            return hr <= Double(settings.andModeThreshold)
+        }()
+
+        // OR モード: 心拍低下/静止と独立に、「現在心拍 ≤ 閾値」が満たされたら
+        // 眠気条件成立とみなす。
+        //  - モード無効なら false (既存条件のみで判定)
+        let orModeFires: Bool = {
+            guard settings.orModeEnabled else { return false }
+            guard let hr = heartRate else { return false }
+            return hr <= Double(settings.orModeThreshold)
+        }()
+
+        // 既存の 2 条件 AND に AND モードのゲートをかけた上で、
+        // OR モードと OR する。OR モード側も `drowsyTriggerSeconds` 秒の
+        // 連続性を要求するため、一瞬だけ低くなった場合は発火しない。
+        let drowsyConditionMet = (heartRateDropDetected && isStill && andModePasses) || orModeFires
+
+        if drowsyConditionMet {
             if drowsyConditionStartedAt == nil {
                 drowsyConditionStartedAt = Date()
             }

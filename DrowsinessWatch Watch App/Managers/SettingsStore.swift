@@ -57,6 +57,12 @@ final class SettingsStore: ObservableObject {
         static let drowsyTriggerSeconds = "settings.drowsyTriggerSeconds"
         static let debugHeartRateEnabled = "settings.debugHeartRateEnabled"
         static let debugHeartRate = "settings.debugHeartRate"
+        static let andModeEnabled = "settings.andModeEnabled"
+        static let andModeThreshold = "settings.andModeThreshold"
+        static let orModeEnabled = "settings.orModeEnabled"
+        static let orModeThreshold = "settings.orModeThreshold"
+        static let fixedBaselineEnabled = "settings.fixedBaselineEnabled"
+        static let fixedBaselineValue = "settings.fixedBaselineValue"
     }
 
     private let defaults: UserDefaults
@@ -131,6 +137,65 @@ final class SettingsStore: ObservableObject {
         }
     }
 
+    /// AND モード: 既存の判定 (心拍低下 + 静止) に加えて、
+    /// **現在心拍が閾値以下** であることも AND で要求する。
+    /// 発火条件を厳しくしたい (低 HR レンジでのみ発動させたい) ときに使う。
+    @Published var andModeEnabled: Bool {
+        didSet { defaults.set(andModeEnabled, forKey: Keys.andModeEnabled) }
+    }
+
+    /// AND モードの上限心拍数 (60 〜 100 bpm、既定 70)。
+    /// 現在心拍がこの値以下のときだけ既存の居眠り判定を有効にする。
+    @Published var andModeThreshold: Int {
+        didSet {
+            let clamped = max(60, min(100, andModeThreshold))
+            if clamped != andModeThreshold {
+                andModeThreshold = clamped
+                return
+            }
+            defaults.set(clamped, forKey: Keys.andModeThreshold)
+        }
+    }
+
+    /// OR モード: 心拍低下 / 静止を問わず、現在心拍が閾値以下なら
+    /// 居眠りと判定する (`drowsyTriggerSeconds` 秒連続で継続した場合)。
+    /// 「徐脈が出たら即アラート」という攻撃的な運用向け。
+    @Published var orModeEnabled: Bool {
+        didSet { defaults.set(orModeEnabled, forKey: Keys.orModeEnabled) }
+    }
+
+    /// OR モードの上限心拍数 (60 〜 90 bpm、既定 65)。
+    /// AND モードより狭い範囲にしているのは、OR モードが強力で誤検知しやすいため。
+    @Published var orModeThreshold: Int {
+        didSet {
+            let clamped = max(60, min(90, orModeThreshold))
+            if clamped != orModeThreshold {
+                orModeThreshold = clamped
+                return
+            }
+            defaults.set(clamped, forKey: Keys.orModeThreshold)
+        }
+    }
+
+    /// 基準値固定モード: ベースラインを実測値の移動平均ではなく、
+    /// 設定値に固定する。個人の安静時 HR が分かっている場合や、
+    /// 動的学習が安定しない環境での利用を想定。
+    @Published var fixedBaselineEnabled: Bool {
+        didSet { defaults.set(fixedBaselineEnabled, forKey: Keys.fixedBaselineEnabled) }
+    }
+
+    /// 基準値固定モード時に使う固定ベースライン (60 〜 100 bpm、既定 75)。
+    @Published var fixedBaselineValue: Int {
+        didSet {
+            let clamped = max(60, min(100, fixedBaselineValue))
+            if clamped != fixedBaselineValue {
+                fixedBaselineValue = clamped
+                return
+            }
+            defaults.set(clamped, forKey: Keys.fixedBaselineValue)
+        }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
@@ -182,6 +247,15 @@ final class SettingsStore: ObservableObject {
         if defaults.object(forKey: Keys.debugHeartRate) == nil {
             defaults.set(70, forKey: Keys.debugHeartRate)
         }
+        if defaults.object(forKey: Keys.andModeThreshold) == nil {
+            defaults.set(70, forKey: Keys.andModeThreshold)
+        }
+        if defaults.object(forKey: Keys.orModeThreshold) == nil {
+            defaults.set(65, forKey: Keys.orModeThreshold)
+        }
+        if defaults.object(forKey: Keys.fixedBaselineValue) == nil {
+            defaults.set(75, forKey: Keys.fixedBaselineValue)
+        }
 
         let storedHRDrop = defaults.double(forKey: Keys.heartRateDropThreshold)
         self.heartRateDropThreshold = max(0.06, min(0.24, storedHRDrop == 0 ? 0.12 : storedHRDrop))
@@ -195,6 +269,15 @@ final class SettingsStore: ObservableObject {
         self.debugHeartRateEnabled = defaults.bool(forKey: Keys.debugHeartRateEnabled)
         let storedDebugHR = defaults.integer(forKey: Keys.debugHeartRate)
         self.debugHeartRate = max(50, min(100, storedDebugHR == 0 ? 70 : storedDebugHR))
+        self.andModeEnabled = defaults.bool(forKey: Keys.andModeEnabled)
+        let storedAnd = defaults.integer(forKey: Keys.andModeThreshold)
+        self.andModeThreshold = max(60, min(100, storedAnd == 0 ? 70 : storedAnd))
+        self.orModeEnabled = defaults.bool(forKey: Keys.orModeEnabled)
+        let storedOr = defaults.integer(forKey: Keys.orModeThreshold)
+        self.orModeThreshold = max(60, min(90, storedOr == 0 ? 65 : storedOr))
+        self.fixedBaselineEnabled = defaults.bool(forKey: Keys.fixedBaselineEnabled)
+        let storedFixed = defaults.integer(forKey: Keys.fixedBaselineValue)
+        self.fixedBaselineValue = max(60, min(100, storedFixed == 0 ? 75 : storedFixed))
     }
 
     /// 累積発報回数をリセットする。

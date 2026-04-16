@@ -27,6 +27,12 @@ struct ContentView: View {
 
                 triggerSecondsSection
 
+                andModeSection
+
+                orModeSection
+
+                fixedBaselineSection
+
                 primaryActionButton
 
                 HStack(spacing: 6) {
@@ -78,7 +84,7 @@ struct ContentView: View {
                 value: detector.heartRate.map { String(format: "%.0f bpm", $0) } ?? "--"
             )
             metricRow(
-                label: "基準",
+                label: settings.fixedBaselineEnabled ? "基準 (FIXED)" : "基準",
                 value: detector.baselineHeartRate.map { String(format: "%.0f bpm", $0) } ?? "--"
             )
             metricRow(
@@ -137,6 +143,102 @@ struct ContentView: View {
                 Text("\(settings.drowsyTriggerSeconds) 秒")
                     .font(.caption)
                     .monospacedDigit()
+            }
+        }
+    }
+
+    /// AND モード: 既存の判定 (心拍低下 + 静止) に「現在心拍 ≤ 閾値」を
+    /// 追加で AND するセクション。低 HR レンジでのみ発動させたい場合に使う。
+    private var andModeSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: $settings.andModeEnabled) {
+                Text("AND モード")
+                    .font(.caption2)
+            }
+
+            if settings.andModeEnabled {
+                Stepper(
+                    value: $settings.andModeThreshold,
+                    in: 60...100,
+                    step: 1
+                ) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("上限心拍")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("\(settings.andModeThreshold) bpm 以下")
+                            .font(.caption)
+                            .monospacedDigit()
+                    }
+                }
+
+                Text("心拍が上限以下のときだけ既存判定を有効化")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// OR モード: 既存判定と独立に「現在心拍 ≤ 閾値」を連続秒数満たせば
+    /// 単独で発火するセクション。徐脈即アラート向け。
+    private var orModeSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: $settings.orModeEnabled) {
+                Text("OR モード")
+                    .font(.caption2)
+            }
+
+            if settings.orModeEnabled {
+                Stepper(
+                    value: $settings.orModeThreshold,
+                    in: 60...90,
+                    step: 1
+                ) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("上限心拍")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("\(settings.orModeThreshold) bpm 以下")
+                            .font(.caption)
+                            .monospacedDigit()
+                    }
+                }
+
+                Text("心拍が上限以下なら単独で居眠りと判定")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// 基準値固定モード: ベースラインを実測値の移動平均ではなく
+    /// 設定値に固定するセクション。監視中でも即時反映される。
+    private var fixedBaselineSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: $settings.fixedBaselineEnabled) {
+                Text("基準値固定")
+                    .font(.caption2)
+            }
+
+            if settings.fixedBaselineEnabled {
+                Stepper(
+                    value: $settings.fixedBaselineValue,
+                    in: 60...100,
+                    step: 1
+                ) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("基準")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("\(settings.fixedBaselineValue) bpm")
+                            .font(.caption)
+                            .monospacedDigit()
+                    }
+                }
+
+                Text("実測値を無視して上記を基準値に固定")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
     }
