@@ -75,6 +75,11 @@ final class DrowsinessDetector: ObservableObject {
     /// ベースライン算出用の直近心拍数の履歴 (最大 120 サンプル ≒ 数分)。
     private var recentHeartRates: [Double] = []
     private let baselineWindow = 120
+    /// 基準値を確定するために必要な最低サンプル数。
+    /// 少なくするほど基準値が早く出るが、ノイズに引っ張られやすくなる。
+    /// 履歴シード (`seedBaselineFromHistory`) と併用して、
+    /// 実質 **監視開始直後〜数秒以内** に基準値が出るようにしている。
+    private let minSamplesForBaseline = 3
 
     // MARK: - イニシャライザ
 
@@ -107,16 +112,22 @@ final class DrowsinessDetector: ObservableObject {
         switch settings.backgroundMode {
         case .off:
             // 通常どおり HealthKit ストリーミングで心拍取得。
-            healthKit.requestAuthorization(startStreaming: true)
+            healthKit.requestAuthorization(startStreaming: true) { [weak self] in
+                self?.seedBaselineFromHistory()
+            }
             bindHealthKitHeartRateStream()
         case .extendedRuntime:
-            healthKit.requestAuthorization(startStreaming: true)
+            healthKit.requestAuthorization(startStreaming: true) { [weak self] in
+                self?.seedBaselineFromHistory()
+            }
             bindHealthKitHeartRateStream()
             runtimeSession.start()
         case .workout:
             // ワークアウトセッション経由で心拍を受ける。認可のみ取って
             // AnchoredObjectQuery は起動しない (重複防止)。
-            healthKit.requestAuthorization(startStreaming: false)
+            healthKit.requestAuthorization(startStreaming: false) { [weak self] in
+                self?.seedBaselineFromHistory()
+            }
             workout.onHeartRate = { [weak self] bpm in
                 self?.handleHeartRateUpdate(bpm)
             }
@@ -174,10 +185,30 @@ final class DrowsinessDetector: ObservableObject {
             recentHeartRates.removeFirst(recentHeartRates.count - baselineWindow)
         }
 
-        // 最低 20 サンプル集まってからベースラインを確立する。
-        if recentHeartRates.count >= 20 {
+        // 最低サンプル数 (既定 3) を満たしたらベースラインを確立する。
+        // 監視開始直後は履歴シードで 3 個以上埋まっていることが多く、
+        // 初回の HR ストリーム受信とほぼ同時に基準値が出る想定。
+        if recentHeartRates.count >= minSamplesForBaseline {
             let sum = recentHeartRates.reduce(0, +)
             baselineHeartRate = sum / Double(recentHeartRates.count)
+        }
+    }
+
+    /// 監視開始直後に、過去 30 分の心拍履歴から基準値を即座に立てる。
+    /// HealthKit 認可が完了した後に呼ぶ想定。
+    private func seedBaselineFromHistory() {
+        healthKit.fetchRecentHeartRates(within: 30 * 60) { [weak self] bpms in
+            guard let self, !bpms.isEmpty else { return }
+
+            // ストリーミングで既に到着した最新サンプルを壊さないよう先頭に挿入する。
+            // ウィンドウ内に収まるよう総数を baselineWindow に制限。
+            let combined = (bpms + self.recentHeartRates).suffix(self.baselineWindow)
+            self.recentHeartRates = Array(combined)
+
+            if self.recentHeartRates.count >= self.minSamplesForBaseline {
+                let sum = self.recentHeartRates.reduce(0, +)
+                self.baselineHeartRate = sum / Double(self.recentHeartRates.count)
+            }
         }
     }
 
