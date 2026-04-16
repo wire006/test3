@@ -41,11 +41,7 @@ struct ContentView: View {
                     .buttonStyle(.bordered)
                 }
 
-                Toggle(isOn: $settings.useBackgroundSession) {
-                    Text("バックグラウンド継続")
-                        .font(.caption2)
-                }
-                .disabled(detector.state != .idle)
+                backgroundModeSection
             }
             .padding(.horizontal, 4)
         }
@@ -124,6 +120,27 @@ struct ContentView: View {
                     .font(.caption)
                     .monospacedDigit()
             }
+        }
+    }
+
+    /// バックグラウンド実行方式を選ぶセクション。
+    /// 監視中は誤って切り替わらないよう無効化する。
+    private var backgroundModeSection: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Picker(selection: $settings.backgroundMode) {
+                ForEach(BackgroundMode.allCases) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            } label: {
+                Text("バックグラウンド")
+                    .font(.caption2)
+            }
+            .pickerStyle(.navigationLink)
+            .disabled(detector.state != .idle)
+
+            Text(settings.backgroundMode.summary)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 

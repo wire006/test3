@@ -12,10 +12,14 @@ Apple Watch 単体で動作する、居眠り検知 + 振動アラートアプ�
   一定時間続いた場合に「居眠り」と判定します。
 - **振動アラート**: Taptic Engine で `notification → failure → retry → notification` の
   段階的ハプティクスを連続再生し、確実にユーザーを起こします。
-- **バックグラウンド継続**: `WKExtendedRuntimeSession` を併用し、
-  画面消灯中・他アプリ表示中もセンサー取得と判定を継続します。
-  `HKWorkoutSession` と違い **時計画面から自動でアプリに切り替わる挙動は発生しません**。
-  トグルで ON/OFF 可能。
+- **バックグラウンド継続 (3 モード選択)**: 画面消灯中・他アプリ表示中の挙動を
+  シーンに応じて切り替え可能。
+  - **オフ**: 前面表示中のみ監視。
+  - **拡張実行 (既定)**: `WKExtendedRuntimeSession` を利用。
+    **時計画面から自動でアプリに切り替わりません**。継続時間は概ね数十分〜1 時間。
+  - **ワークアウト**: `HKWorkoutSession` を "other" アクティビティとして開始。
+    長時間 (運転・会議中など) 動作し続ける代わりに、**手首を上げると
+    自動的にこのアプリが前面復帰** します。
 - **設定と累計発報数の永続化**: 感度・ワークアウトセッション利用可否・累計発報回数を
   `UserDefaults` に保存し、アプリ再起動後も引き継ぎます。
 - **発報履歴**: 直近 50 件の発報時刻・心拍・ベースライン・活動量を保存し、
@@ -48,6 +52,7 @@ DrowsinessWatch Watch App/
 │   ├── MotionManager.swift         # 加速度取得
 │   ├── HapticManager.swift         # 振動再生
 │   ├── ExtendedRuntimeSessionManager.swift # WKExtendedRuntimeSession 管理
+│   ├── WorkoutSessionManager.swift # HKWorkoutSession 管理 (ワークアウトモード用)
 │   ├── SettingsStore.swift         # 設定永続化 (UserDefaults)
 │   └── AlertHistoryStore.swift     # 発報履歴永続化
 ├── Views/
@@ -65,7 +70,8 @@ DrowsinessWatch Watch App/
    配下のファイルをドラッグ & ドロップで追加します。
 3. ターゲットの **Signing & Capabilities** で以下を有効にします:
    - HealthKit
-   - (Background Modes は不要。WKExtendedRuntimeSession は entitlement 不要)
+   - Background Modes → **Workout processing** (ワークアウトモードを使う場合に必要。
+     拡張実行 / オフ のみで運用する場合は不要)
 4. `Info.plist` の権限文言 (`NSHealthShareUsageDescription`, `NSMotionUsageDescription`) を
    必要に応じて編集します。
 5. Apple Watch 実機にビルドしてインストールします (ハプティクスとセンサーはシミュレータでは動きません)。
@@ -82,9 +88,11 @@ DrowsinessWatch Watch App/
 
 - 本アプリは医療機器ではありません。あくまで眠気対策補助ツールとしてご利用ください。
 - 運転中など安全が重要な場面では、過信せず、こまめな休憩を優先してください。
-- `WKExtendedRuntimeSession` はカテゴリに応じて **数十分〜1 時間程度** でシステムから
-  自動終了します。長時間監視が必要な場合は、セッション切れ後にアプリを再度前面に出して
-  「監視開始」を押し直してください。
+- **拡張実行** モードの `WKExtendedRuntimeSession` はカテゴリに応じて
+  **数十分〜1 時間程度** でシステムから自動終了します。長時間監視が必要な場合は、
+  セッション切れ後にアプリを再度前面に出して「監視開始」を押し直してください。
+- **ワークアウト** モードは長時間稼働できますが、手首を上げるたびに本アプリが
+  自動で前面に復帰します。時計画面を邪魔されたくない場合は拡張実行モードを選んでください。
 
 ## ライセンス
 
