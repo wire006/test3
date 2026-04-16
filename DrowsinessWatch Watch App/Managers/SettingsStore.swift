@@ -52,6 +52,8 @@ final class SettingsStore: ObservableObject {
         static let legacyUseBackgroundSession = "settings.useBackgroundSession"
         static let legacyUseWorkoutSession = "settings.useWorkoutSession"
         static let drowsyTriggerSeconds = "settings.drowsyTriggerSeconds"
+        static let debugHeartRateEnabled = "settings.debugHeartRateEnabled"
+        static let debugHeartRate = "settings.debugHeartRate"
     }
 
     private let defaults: UserDefaults
@@ -81,6 +83,25 @@ final class SettingsStore: ObservableObject {
                 return
             }
             defaults.set(clamped, forKey: Keys.drowsyTriggerSeconds)
+        }
+    }
+
+    /// デバッグモード: 実際の心拍数に関係なく `debugHeartRate` を現在心拍として
+    /// 扱う。動作確認や UI テストに使う。基準値は実測ベースで学習し続けるため、
+    /// `debugHeartRate` を基準値より低く設定すれば居眠り判定が発火する。
+    @Published var debugHeartRateEnabled: Bool {
+        didSet { defaults.set(debugHeartRateEnabled, forKey: Keys.debugHeartRateEnabled) }
+    }
+
+    /// デバッグモード時に使う擬似心拍数 (50 〜 100 bpm)。
+    @Published var debugHeartRate: Int {
+        didSet {
+            let clamped = max(50, min(100, debugHeartRate))
+            if clamped != debugHeartRate {
+                debugHeartRate = clamped
+                return
+            }
+            defaults.set(clamped, forKey: Keys.debugHeartRate)
         }
     }
 
@@ -114,6 +135,9 @@ final class SettingsStore: ObservableObject {
         if defaults.object(forKey: Keys.drowsyTriggerSeconds) == nil {
             defaults.set(30, forKey: Keys.drowsyTriggerSeconds)
         }
+        if defaults.object(forKey: Keys.debugHeartRate) == nil {
+            defaults.set(70, forKey: Keys.debugHeartRate)
+        }
 
         self.sensitivity = defaults.double(forKey: Keys.sensitivity)
         self.totalAlertCount = defaults.integer(forKey: Keys.totalAlertCount)
@@ -121,6 +145,9 @@ final class SettingsStore: ObservableObject {
         self.backgroundMode = BackgroundMode(rawValue: raw) ?? .off
         let storedTrigger = defaults.integer(forKey: Keys.drowsyTriggerSeconds)
         self.drowsyTriggerSeconds = max(1, min(30, storedTrigger))
+        self.debugHeartRateEnabled = defaults.bool(forKey: Keys.debugHeartRateEnabled)
+        let storedDebugHR = defaults.integer(forKey: Keys.debugHeartRate)
+        self.debugHeartRate = max(50, min(100, storedDebugHR == 0 ? 70 : storedDebugHR))
     }
 
     /// 累積発報回数をリセットする。

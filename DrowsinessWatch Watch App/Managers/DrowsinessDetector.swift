@@ -137,6 +137,9 @@ final class DrowsinessDetector: ObservableObject {
         // 初期評価間隔で Timer をスケジュール。以後 adaptCadence() で張り替える。
         scheduleEvaluationTimer(interval: 1.0)
 
+        // デバッグ心拍設定の変更を監視。
+        bindDebugHeartRate()
+
         sessionAlertCount = 0
         state = .monitoring
     }
@@ -178,20 +181,43 @@ final class DrowsinessDetector: ObservableObject {
 
     private func handleHeartRateUpdate(_ value: Double?) {
         guard let value else { return }
-        heartRate = value
 
+        // 基準値は常に実測値から学習させる (デバッグモード時も維持)。
+        // これにより、デバッグ HR を基準値より低く設定すれば居眠り判定を発火できる。
         recentHeartRates.append(value)
         if recentHeartRates.count > baselineWindow {
             recentHeartRates.removeFirst(recentHeartRates.count - baselineWindow)
         }
-
-        // 最低サンプル数 (既定 3) を満たしたらベースラインを確立する。
-        // 監視開始直後は履歴シードで 3 個以上埋まっていることが多く、
-        // 初回の HR ストリーム受信とほぼ同時に基準値が出る想定。
         if recentHeartRates.count >= minSamplesForBaseline {
             let sum = recentHeartRates.reduce(0, +)
             baselineHeartRate = sum / Double(recentHeartRates.count)
         }
+
+        // 現在心拍はデバッグモード時は設定値で上書きし、判定ロジックに
+        // 擬似心拍を供給する。
+        if settings.debugHeartRateEnabled {
+            heartRate = Double(settings.debugHeartRate)
+        } else {
+            heartRate = value
+        }
+    }
+
+    /// デバッグモードのトグル / 擬似心拍の変更を監視し、
+    /// `heartRate` を即座に反映する。
+    private func bindDebugHeartRate() {
+        Publishers.CombineLatest(
+            settings.$debugHeartRateEnabled,
+            settings.$debugHeartRate
+        )
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] enabled, bpm in
+            guard let self else { return }
+            if enabled {
+                self.heartRate = Double(bpm)
+            }
+            // オフにした瞬間は、次の実測サンプル到着までは最後の値を維持。
+        }
+        .store(in: &cancellables)
     }
 
     /// 監視開始直後に、過去 30 分の心拍履歴から基準値を即座に立てる。
