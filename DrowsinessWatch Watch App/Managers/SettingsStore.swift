@@ -34,9 +34,9 @@ enum BackgroundMode: String, CaseIterable, Identifiable {
     /// 選択時の補足説明 (UI 下部などで利用可)。
     var summary: String {
         switch self {
-        case .off: return "前面のみ監視"
-        case .extendedRuntime: return "手首上げで復帰しない"
-        case .workout: return "長時間可 / 手首上げで復帰"
+        case .off: return "省電力 / 前面のみ監視"
+        case .extendedRuntime: return "中電力 / 手首上げで復帰しない"
+        case .workout: return "高電力 / 長時間可・手首上げで復帰"
         }
     }
 }
@@ -99,14 +99,15 @@ final class SettingsStore: ObservableObject {
             //  2. それも無ければさらに旧 `useWorkoutSession` (Bool)
             //     - true  → .extendedRuntime (移行後の既定挙動を維持)
             //     - false → .off
-            //  3. いずれも無ければ新規 → .extendedRuntime
+            //  3. いずれも無ければ新規インストール → 省電力のため .off。
+            //     必要に応じて UI から .extendedRuntime / .workout を選べる。
             let migrated: BackgroundMode
             if let legacyBG = defaults.object(forKey: Keys.legacyUseBackgroundSession) as? Bool {
                 migrated = legacyBG ? .extendedRuntime : .off
             } else if let legacyWorkout = defaults.object(forKey: Keys.legacyUseWorkoutSession) as? Bool {
                 migrated = legacyWorkout ? .extendedRuntime : .off
             } else {
-                migrated = .extendedRuntime
+                migrated = .off
             }
             defaults.set(migrated.rawValue, forKey: Keys.backgroundMode)
         }
@@ -116,8 +117,8 @@ final class SettingsStore: ObservableObject {
 
         self.sensitivity = defaults.double(forKey: Keys.sensitivity)
         self.totalAlertCount = defaults.integer(forKey: Keys.totalAlertCount)
-        let raw = defaults.string(forKey: Keys.backgroundMode) ?? BackgroundMode.extendedRuntime.rawValue
-        self.backgroundMode = BackgroundMode(rawValue: raw) ?? .extendedRuntime
+        let raw = defaults.string(forKey: Keys.backgroundMode) ?? BackgroundMode.off.rawValue
+        self.backgroundMode = BackgroundMode(rawValue: raw) ?? .off
         let storedTrigger = defaults.integer(forKey: Keys.drowsyTriggerSeconds)
         self.drowsyTriggerSeconds = max(1, min(30, storedTrigger))
     }
