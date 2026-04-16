@@ -26,8 +26,16 @@ final class HealthKitManager: NSObject, ObservableObject {
     /// 心拍数ストリーミングも開始する。
     /// - Note: ワークアウトモードでは HKLiveWorkoutBuilder から心拍を拾うため、
     ///         認可のみ取って AnchoredObjectQuery は起動しない運用にする。
-    func requestAuthorization(startStreaming: Bool = true) {
-        guard HKHealthStore.isHealthDataAvailable() else { return }
+    /// - Parameter onAuthorized: 認可完了 (成功/失敗問わず main thread) で呼ばれる。
+    ///   主に基準値の履歴シード処理をキックするために利用する。
+    func requestAuthorization(
+        startStreaming: Bool = true,
+        onAuthorized: (() -> Void)? = nil
+    ) {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            DispatchQueue.main.async { onAuthorized?() }
+            return
+        }
 
         let readTypes: Set<HKObjectType> = [heartRateType]
         healthStore.requestAuthorization(toShare: [], read: readTypes) { [weak self] success, _ in
@@ -36,8 +44,50 @@ final class HealthKitManager: NSObject, ObservableObject {
                 if success && startStreaming {
                     self?.startHeartRateStreaming()
                 }
+                onAuthorized?()
             }
         }
+    }
+
+    /// 直近の心拍サンプルをまとめて取得する。基準値 (baseline) を
+    /// アプリ起動直後から確立するためのシード用途で使う。
+    /// - Parameters:
+    ///   - interval: 何秒前までを遡るか (既定 30 分)。
+    ///   - completion: 取得した bpm 値の配列 (古い順) が main thread で返る。
+    func fetchRecentHeartRates(
+        within interval: TimeInterval = 30 * 60,
+        completion: @escaping ([Double]) -> Void
+    ) {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            DispatchQueue.main.async { completion([]) }
+            return
+        }
+        let end = Date()
+        let start = end.addingTimeInterval(-interval)
+        let predicate = HKQuery.predicateForSamples(
+            withStart: start,
+            end: end,
+            options: .strictEndDate
+        )
+        let sort = NSSortDescriptor(
+            key: HKSampleSortIdentifierStartDate,
+            ascending: true
+        )
+        let query = HKSampleQuery(
+            sampleType: heartRateType,
+            predicate: predicate,
+            limit: HKObjectQueryNoLimit,
+            sortDescriptors: [sort]
+        ) { [weak self] _, samples, _ in
+            guard let self,
+                  let quantitySamples = samples as? [HKQuantitySample] else {
+                DispatchQueue.main.async { completion([]) }
+                return
+            }
+            let bpms = quantitySamples.map { $0.quantity.doubleValue(for: self.bpmUnit) }
+            DispatchQueue.main.async { completion(bpms) }
+        }
+        healthStore.execute(query)
     }
 
     /// 心拍数のストリーミング取得を開始する。
