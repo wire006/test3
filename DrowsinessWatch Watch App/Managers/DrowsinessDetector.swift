@@ -43,6 +43,7 @@ final class DrowsinessDetector: ObservableObject {
     private let motion = MotionManager()
     private let haptic = HapticManager()
     private let runtimeSession = ExtendedRuntimeSessionManager()
+    private let workout = WorkoutSessionManager()
 
     // MARK: - 閾値
 
@@ -80,10 +81,17 @@ final class DrowsinessDetector: ObservableObject {
         healthKit.requestAuthorization()
         motion.start()
 
-        // バックグラウンド実行を安定させるため Extended Runtime Session を開始する。
-        // HKWorkoutSession と違い、時計画面から自動的にアプリに復帰しない。
-        if settings.useBackgroundSession {
+        // バックグラウンド実行方式をユーザー設定に応じて切り替える。
+        //  - .extendedRuntime: 手首上げで自動復帰しないが、継続時間は数十分〜1h 程度。
+        //  - .workout        : 長時間稼働可能。ただし手首上げでアプリが自動前面復帰する。
+        //  - .off            : 前面時のみ監視。画面消灯・他アプリ表示で停止し得る。
+        switch settings.backgroundMode {
+        case .off:
+            break
+        case .extendedRuntime:
             runtimeSession.start()
+        case .workout:
+            workout.start()
         }
 
         // HealthKit / Motion の値を自身の @Published にブリッジ。
@@ -118,7 +126,9 @@ final class DrowsinessDetector: ObservableObject {
         cancellables.removeAll()
         healthKit.stopHeartRateStreaming()
         motion.stop()
+        // 停止時は安全のため両方のセッションを終了する (どちらかが未使用でも no-op)。
         runtimeSession.stop()
+        workout.stop()
         recentHeartRates.removeAll()
         consecutiveDrowsySeconds = 0
         state = .idle
