@@ -22,15 +22,18 @@ final class HealthKitManager: NSObject, ObservableObject {
     private let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
     private let bpmUnit = HKUnit.count().unitDivided(by: .minute())
 
-    /// 権限をリクエストし、成功したら心拍数の監視を開始する。
-    func requestAuthorization() {
+    /// 権限をリクエストし、`startStreaming` が true の場合は成功後に
+    /// 心拍数ストリーミングも開始する。
+    /// - Note: ワークアウトモードでは HKLiveWorkoutBuilder から心拍を拾うため、
+    ///         認可のみ取って AnchoredObjectQuery は起動しない運用にする。
+    func requestAuthorization(startStreaming: Bool = true) {
         guard HKHealthStore.isHealthDataAvailable() else { return }
 
         let readTypes: Set<HKObjectType> = [heartRateType]
         healthStore.requestAuthorization(toShare: [], read: readTypes) { [weak self] success, _ in
             DispatchQueue.main.async {
                 self?.isAuthorized = success
-                if success {
+                if success && startStreaming {
                     self?.startHeartRateStreaming()
                 }
             }

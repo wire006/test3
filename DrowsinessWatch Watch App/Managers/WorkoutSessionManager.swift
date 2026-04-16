@@ -24,9 +24,16 @@ protocol WorkoutSessionManagerDelegate: AnyObject {
 final class WorkoutSessionManager: NSObject {
     weak var delegate: WorkoutSessionManagerDelegate?
 
+    /// ワークアウトセッション経由で心拍サンプルが届いたときに呼ばれるコールバック。
+    /// HealthKit 側の AnchoredObjectQuery ストリーミングと重複しないよう、
+    /// ワークアウトモードではこちらに一本化する。
+    var onHeartRate: ((Double) -> Void)?
+
     private let healthStore = HKHealthStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
+    private let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
+    private let bpmUnit = HKUnit.count().unitDivided(by: .minute())
 
     /// バックグラウンド実行用のワークアウトセッションを開始する。
     func start() {
@@ -116,6 +123,14 @@ extension WorkoutSessionManager: HKLiveWorkoutBuilderDelegate {
         _ workoutBuilder: HKLiveWorkoutBuilder,
         didCollectDataOf collectedTypes: Set<HKSampleType>
     ) {
-        // 心拍数は HealthKitManager 側のストリーミングで別途取得する。
+        // ワークアウトビルダー経由で心拍を受け取ることで、
+        // 別途 HKAnchoredObjectQuery を走らせる必要がなくなり電力を節約できる。
+        guard collectedTypes.contains(heartRateType) else { return }
+        guard let stats = workoutBuilder.statistics(for: heartRateType),
+              let quantity = stats.mostRecentQuantity() else { return }
+        let bpm = quantity.doubleValue(for: bpmUnit)
+        DispatchQueue.main.async { [weak self] in
+            self?.onHeartRate?(bpm)
+        }
     }
 }
