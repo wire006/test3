@@ -33,6 +33,8 @@ struct ContentView: View {
 
                 fixedBaselineSection
 
+                powerSavingSection
+
                 primaryActionButton
 
                 NavigationLink(destination: HistoryView(store: history)) {
@@ -152,7 +154,7 @@ struct ContentView: View {
             if settings.andModeEnabled {
                 Stepper(
                     value: $settings.andModeThreshold,
-                    in: 60...100,
+                    in: 40...120,
                     step: 1
                 ) {
                     VStack(alignment: .leading, spacing: 0) {
@@ -184,7 +186,7 @@ struct ContentView: View {
             if settings.orModeEnabled {
                 Stepper(
                     value: $settings.orModeThreshold,
-                    in: 60...90,
+                    in: 40...120,
                     step: 1
                 ) {
                     VStack(alignment: .leading, spacing: 0) {
@@ -233,6 +235,23 @@ struct ContentView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    /// 省エネモード: バッテリー残量に関係なく低電力プロファイル
+    /// (評価間隔 2 倍・モーションレート半減) を常時適用するトグル。
+    private var powerSavingSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: $settings.powerSavingEnabled) {
+                Text("省エネモード")
+                    .font(.caption2)
+            }
+
+            Text(settings.powerSavingEnabled
+                 ? "常時低電力稼働 (評価 2 倍・モーション半減)"
+                 : "バッテリー 20% 以下で自動低電力")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 

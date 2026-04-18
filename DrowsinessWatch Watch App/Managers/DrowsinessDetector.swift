@@ -412,7 +412,12 @@ final class DrowsinessDetector: ObservableObject {
         return (interval, motionHz)
     }
 
+    /// 低電力プロファイル (評価間隔 2 倍・モーション半減) を適用すべきかを返す。
+    ///  - バッテリー残量が 20% 未満のときは自動的に true。
+    ///  - ユーザーが手動で「省エネモード」をオンにしているときも true。
+    ///    これによりバッテリーが十分ある段階から省エネ稼働できる。
     private func isBatteryLow() -> Bool {
+        if settings.powerSavingEnabled { return true }
         let level = WKInterfaceDevice.current().batteryLevel
         // -1 は取得不能。その場合は低下とみなさない。
         return level >= 0 && level < 0.2
