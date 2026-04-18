@@ -63,6 +63,7 @@ final class SettingsStore: ObservableObject {
         static let orModeThreshold = "settings.orModeThreshold"
         static let fixedBaselineEnabled = "settings.fixedBaselineEnabled"
         static let fixedBaselineValue = "settings.fixedBaselineValue"
+        static let powerSavingEnabled = "settings.powerSavingEnabled"
     }
 
     private let defaults: UserDefaults
@@ -144,11 +145,11 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(andModeEnabled, forKey: Keys.andModeEnabled) }
     }
 
-    /// AND モードの上限心拍数 (60 〜 100 bpm、既定 70)。
+    /// AND モードの上限心拍数 (40 〜 120 bpm、既定 70)。
     /// 現在心拍がこの値以下のときだけ既存の居眠り判定を有効にする。
     @Published var andModeThreshold: Int {
         didSet {
-            let clamped = max(60, min(100, andModeThreshold))
+            let clamped = max(40, min(120, andModeThreshold))
             if clamped != andModeThreshold {
                 andModeThreshold = clamped
                 return
@@ -164,11 +165,11 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(orModeEnabled, forKey: Keys.orModeEnabled) }
     }
 
-    /// OR モードの上限心拍数 (60 〜 90 bpm、既定 65)。
-    /// AND モードより狭い範囲にしているのは、OR モードが強力で誤検知しやすいため。
+    /// OR モードの上限心拍数 (40 〜 120 bpm、既定 65)。
+    /// 低めに設定することを推奨するが、用途に応じて広く取れるようにしてある。
     @Published var orModeThreshold: Int {
         didSet {
-            let clamped = max(60, min(90, orModeThreshold))
+            let clamped = max(40, min(120, orModeThreshold))
             if clamped != orModeThreshold {
                 orModeThreshold = clamped
                 return
@@ -194,6 +195,14 @@ final class SettingsStore: ObservableObject {
             }
             defaults.set(clamped, forKey: Keys.fixedBaselineValue)
         }
+    }
+
+    /// 省エネモード: バッテリー残量に関係なく、低電力プロファイル
+    /// (評価間隔 2 倍・モーションレート半分、下限 3Hz) を常時適用する。
+    /// バッテリー残量が 20% を切った場合は自動的に低電力プロファイルになるため、
+    /// 本トグルは「20% 以上でも手動で省エネ稼働させたい」ときに使う。
+    @Published var powerSavingEnabled: Bool {
+        didSet { defaults.set(powerSavingEnabled, forKey: Keys.powerSavingEnabled) }
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -271,13 +280,14 @@ final class SettingsStore: ObservableObject {
         self.debugHeartRate = max(50, min(100, storedDebugHR == 0 ? 70 : storedDebugHR))
         self.andModeEnabled = defaults.bool(forKey: Keys.andModeEnabled)
         let storedAnd = defaults.integer(forKey: Keys.andModeThreshold)
-        self.andModeThreshold = max(60, min(100, storedAnd == 0 ? 70 : storedAnd))
+        self.andModeThreshold = max(40, min(120, storedAnd == 0 ? 70 : storedAnd))
         self.orModeEnabled = defaults.bool(forKey: Keys.orModeEnabled)
         let storedOr = defaults.integer(forKey: Keys.orModeThreshold)
-        self.orModeThreshold = max(60, min(90, storedOr == 0 ? 65 : storedOr))
+        self.orModeThreshold = max(40, min(120, storedOr == 0 ? 65 : storedOr))
         self.fixedBaselineEnabled = defaults.bool(forKey: Keys.fixedBaselineEnabled)
         let storedFixed = defaults.integer(forKey: Keys.fixedBaselineValue)
         self.fixedBaselineValue = max(60, min(100, storedFixed == 0 ? 75 : storedFixed))
+        self.powerSavingEnabled = defaults.bool(forKey: Keys.powerSavingEnabled)
     }
 
     /// 累積発報回数をリセットする。
