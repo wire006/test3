@@ -64,6 +64,7 @@ final class SettingsStore: ObservableObject {
         static let fixedBaselineEnabled = "settings.fixedBaselineEnabled"
         static let fixedBaselineValue = "settings.fixedBaselineValue"
         static let powerSavingEnabled = "settings.powerSavingEnabled"
+        static let shortBaselineEnabled = "settings.shortBaselineEnabled"
     }
 
     private let defaults: UserDefaults
@@ -205,6 +206,13 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(powerSavingEnabled, forKey: Keys.powerSavingEnabled) }
     }
 
+    /// 直近基準値モード: ベースラインを全履歴 (~10 分) ではなく
+    /// 直近約 1 分間の心拍平均で算出する。体調変動への追従が速くなるが、
+    /// 外れ値の影響を受けやすくなる。基準値固定モードが ON のときは無効。
+    @Published var shortBaselineEnabled: Bool {
+        didSet { defaults.set(shortBaselineEnabled, forKey: Keys.shortBaselineEnabled) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
@@ -288,6 +296,7 @@ final class SettingsStore: ObservableObject {
         let storedFixed = defaults.integer(forKey: Keys.fixedBaselineValue)
         self.fixedBaselineValue = max(60, min(100, storedFixed == 0 ? 75 : storedFixed))
         self.powerSavingEnabled = defaults.bool(forKey: Keys.powerSavingEnabled)
+        self.shortBaselineEnabled = defaults.bool(forKey: Keys.shortBaselineEnabled)
     }
 
     /// 累積発報回数をリセットする。

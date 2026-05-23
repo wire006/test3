@@ -15,6 +15,8 @@ struct ContentView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
+                primaryActionButton
+
                 statusBadge
 
                 metricsSection
@@ -35,7 +37,7 @@ struct ContentView: View {
 
                 powerSavingSection
 
-                primaryActionButton
+                shortBaselineSection
 
                 NavigationLink(destination: HistoryView(store: history)) {
                     Label("履歴", systemImage: "list.bullet.rectangle")
@@ -79,7 +81,9 @@ struct ContentView: View {
                 value: detector.heartRate.map { String(format: "%.0f bpm", $0) } ?? "--"
             )
             metricRow(
-                label: settings.fixedBaselineEnabled ? "基準 (FIXED)" : "基準",
+                label: settings.fixedBaselineEnabled ? "基準 (FIXED)"
+                     : settings.shortBaselineEnabled ? "基準 (SHORT)"
+                     : "基準",
                 value: detector.baselineHeartRate.map { String(format: "%.0f bpm", $0) } ?? "--"
             )
             metricRow(
@@ -250,6 +254,23 @@ struct ContentView: View {
             Text(settings.powerSavingEnabled
                  ? "常時低電力稼働 (評価 2 倍・モーション半減)"
                  : "バッテリー 20% 以下で自動低電力")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// 直近基準値モード: ベースラインを直近約 1 分間の心拍平均で計算する。
+    /// 全履歴 (約 10 分) より短い区間で追従するため、体調変動への反応が速い。
+    private var shortBaselineSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: $settings.shortBaselineEnabled) {
+                Text("直近基準値")
+                    .font(.caption2)
+            }
+
+            Text(settings.shortBaselineEnabled
+                 ? "直近約 1 分の平均を基準値に使用"
+                 : "直近約 10 分の平均を基準値に使用")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }

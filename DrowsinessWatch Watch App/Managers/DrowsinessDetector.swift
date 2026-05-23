@@ -78,6 +78,8 @@ final class DrowsinessDetector: ObservableObject {
     /// 履歴シード (`seedBaselineFromHistory`) と併用して、
     /// 実質 **監視開始直後〜数秒以内** に基準値が出るようにしている。
     private let minSamplesForBaseline = 3
+    /// 直近基準値モード用のウィンドウ (約 1 分 ≒ 12 サンプル @5 秒間隔)。
+    private let shortBaselineWindow = 12
 
     // MARK: - イニシャライザ
 
@@ -211,8 +213,14 @@ final class DrowsinessDetector: ObservableObject {
         if settings.fixedBaselineEnabled {
             baselineHeartRate = Double(settings.fixedBaselineValue)
         } else if recentHeartRates.count >= minSamplesForBaseline {
-            let sum = recentHeartRates.reduce(0, +)
-            baselineHeartRate = sum / Double(recentHeartRates.count)
+            let samples: ArraySlice<Double>
+            if settings.shortBaselineEnabled {
+                samples = recentHeartRates.suffix(shortBaselineWindow)
+            } else {
+                samples = recentHeartRates[...]
+            }
+            let sum = samples.reduce(0, +)
+            baselineHeartRate = sum / Double(samples.count)
         }
     }
 
@@ -238,12 +246,13 @@ final class DrowsinessDetector: ObservableObject {
     /// `baselineHeartRate` を即座に反映する。
     /// オフにした瞬間は、実測履歴から再計算して動的ベースラインに戻す。
     private func bindFixedBaseline() {
-        Publishers.CombineLatest(
+        Publishers.CombineLatest3(
             settings.$fixedBaselineEnabled,
-            settings.$fixedBaselineValue
+            settings.$fixedBaselineValue,
+            settings.$shortBaselineEnabled
         )
         .receive(on: DispatchQueue.main)
-        .sink { [weak self] _, _ in
+        .sink { [weak self] _, _, _ in
             self?.recomputeBaseline()
         }
         .store(in: &cancellables)
