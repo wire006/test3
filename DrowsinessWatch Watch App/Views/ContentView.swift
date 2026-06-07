@@ -23,32 +23,35 @@ struct ContentView: View {
 
                 Divider()
 
-                heartRateDropThresholdSection
+                Group {
+                    heartRateDropThresholdSection
 
-                stillnessThresholdSection
+                    stillnessThresholdSection
 
-                triggerSecondsSection
+                    triggerSecondsSection
 
-                andModeSection
+                    andModeSection
 
-                orModeSection
+                    orModeSection
 
-                fixedBaselineSection
+                    fixedBaselineSection
 
-                powerSavingSection
+                    powerSavingSection
 
-                shortBaselineSection
+                    shortBaselineSection
 
-                NavigationLink(destination: HistoryView(store: history)) {
-                    Label("履歴", systemImage: "list.bullet.rectangle")
-                        .font(.caption)
-                        .frame(maxWidth: .infinity)
+                    NavigationLink(destination: HistoryView(store: history)) {
+                        Label("履歴", systemImage: "list.bullet.rectangle")
+                            .font(.caption)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+
+                    backgroundModeSection
+
+                    debugHeartRateSection
                 }
-                .buttonStyle(.bordered)
-
-                backgroundModeSection
-
-                debugHeartRateSection
+                .disabled(detector.state != .idle)
             }
             .padding(.horizontal, 4)
         }
@@ -289,7 +292,6 @@ struct ContentView: View {
                     .font(.caption2)
             }
             .pickerStyle(.navigationLink)
-            .disabled(detector.state != .idle)
 
             Text(settings.backgroundMode.summary)
                 .font(.caption2)
