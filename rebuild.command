@@ -12,7 +12,7 @@
 
 # ---- 設定 (自分の環境に合わせて変更) ----
 
-PROJECT_DIR="$HOME/path/to/DrowsinessWatch"
+PROJECT_DIR="$HOME/Desktop/DrowsinessWatch"
 SCHEME="DrowsinessWatch Watch App"
 DESTINATION="platform=watchOS,arch=arm64"
 
@@ -24,6 +24,12 @@ echo "========================================"
 echo " DrowsinessWatch 再ビルド"
 echo "========================================"
 echo ""
+
+# .xcodeproj を直接指定した場合はディレクトリとプロジェクト名に分離する。
+if [[ "$PROJECT_DIR" == *.xcodeproj ]]; then
+    XCODEPROJ=$(basename "$PROJECT_DIR")
+    PROJECT_DIR=$(dirname "$PROJECT_DIR")
+fi
 
 if [ ! -d "$PROJECT_DIR" ]; then
     echo "[ERROR] プロジェクトディレクトリが見つかりません:"
@@ -37,8 +43,11 @@ fi
 
 cd "$PROJECT_DIR"
 
-XCODEPROJ=$(find . -maxdepth 1 -name "*.xcodeproj" -print -quit)
 if [ -z "$XCODEPROJ" ]; then
+    XCODEPROJ=$(find . -maxdepth 1 -name "*.xcodeproj" -print -quit)
+fi
+
+if [ -z "$XCODEPROJ" ] || [ ! -d "$XCODEPROJ" ]; then
     echo "[ERROR] .xcodeproj が見つかりません: $PROJECT_DIR"
     echo ""
     read -n 1 -s -r -p "何かキーを押すと閉じます..."
