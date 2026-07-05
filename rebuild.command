@@ -14,7 +14,7 @@
 
 PROJECT_DIR="$HOME/Desktop/DrowsinessWatch"
 SCHEME="DrowsinessWatch Watch App"
-DESTINATION="platform=watchOS,arch=arm64"
+DESTINATION="generic/platform=watchOS"
 
 # ---- ここから下は基本的に変更不要 ----
 
@@ -54,21 +54,39 @@ if [ -z "$XCODEPROJ" ] || [ ! -d "$XCODEPROJ" ]; then
     exit 1
 fi
 
-echo "[1/3] クリーン中..."
+# 指定されたスキームが実際に存在するか確認する。
+# 存在しないスキームを指定すると xcodebuild が Segmentation fault を返す
+# ことがあるので、事前にチェックしておく。
+AVAILABLE_SCHEMES=$(xcodebuild -project "$XCODEPROJ" -list 2>/dev/null | awk '/Schemes:/{flag=1;next}/^$/{flag=0}flag' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+if ! echo "$AVAILABLE_SCHEMES" | grep -qFx "$SCHEME"; then
+    echo "[ERROR] スキーム \"$SCHEME\" が見つかりません。"
+    echo ""
+    echo "利用可能なスキーム:"
+    echo "$AVAILABLE_SCHEMES" | sed 's/^/  /'
+    echo ""
+    echo "上記のいずれかをスクリプトの SCHEME に設定してください。"
+    echo ""
+    read -n 1 -s -r -p "何かキーを押すと閉じます..."
+    exit 1
+fi
+
+# スキーム名や destination が誤っている場合 xcodebuild が Segfault することが
+# あるため、`set -e` を一時的に無効化してエラーを最後まで表示できるようにする。
+set +e
+
+echo "[1/2] クリーン中..."
 xcodebuild clean \
     -project "$XCODEPROJ" \
     -scheme "$SCHEME" \
-    -destination "$DESTINATION" \
-    -quiet 2>&1 || true
+    -destination "$DESTINATION"
 
-echo "[2/3] ビルド中 (署名を含む)..."
+echo ""
+echo "[2/2] ビルド中 (署名を含む)..."
 xcodebuild build \
     -project "$XCODEPROJ" \
     -scheme "$SCHEME" \
     -destination "$DESTINATION" \
-    -allowProvisioningUpdates \
-    -quiet
-
+    -allowProvisioningUpdates
 BUILD_RESULT=$?
 
 echo ""
