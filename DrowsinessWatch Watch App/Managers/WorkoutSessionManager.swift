@@ -92,6 +92,35 @@ final class WorkoutSessionManager: NSObject {
         self.session = nil
         self.builder = nil
     }
+
+    /// アプリが強制終了 / スワイプ終了された後などに残ってしまった
+    /// ワークアウトセッションを回収して確実に終了する。
+    ///
+    /// ワークアウトセッションが生きている限り watchOS はこのアプリを
+    /// 「進行中のワークアウト」として扱い、手首を上げるたびに勝手に前面へ
+    /// 復帰・起動させてしまう。アプリを閉じたつもりでも起動し続ける主因が
+    /// この残留セッションなので、監視を開始していない起動時に回収・終了する。
+    ///
+    /// `recoverActiveWorkoutSession` は、アプリが前回サスペンド/終了された際に
+    /// 動作していたセッションを新しいプロセスから取り戻すための API。
+    func endOrphanedSession() {
+        // 既にこのインスタンスがセッションを保持している場合は対象外
+        // (通常の監視中。stop() 側で終了させる)。
+        guard session == nil else { return }
+        healthStore.recoverActiveWorkoutSession { [weak self] recovered, _ in
+            guard let recovered else { return }
+            let builder = recovered.associatedWorkoutBuilder()
+            recovered.end()
+            builder.endCollection(withEnd: Date()) { _, _ in
+                builder.finishWorkout { _, _ in
+                    // 結果は保存しない。回収して終了させるのが目的。
+                }
+            }
+            DispatchQueue.main.async {
+                self?.delegate?.workoutSessionDidEnd()
+            }
+        }
+    }
 }
 
 // MARK: - HKWorkoutSessionDelegate

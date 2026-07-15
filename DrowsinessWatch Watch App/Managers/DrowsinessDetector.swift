@@ -171,6 +171,17 @@ final class DrowsinessDetector: ObservableObject {
         state = .idle
     }
 
+    /// アプリ起動時・フォアグラウンド復帰時に呼ぶ後始末。
+    /// 前回の強制終了 / スワイプ終了で残ったワークアウトセッションが
+    /// 生き続けていると、アプリを閉じても手首上げで勝手に起動してしまう。
+    /// 監視していない (idle) ときに残留セッションを回収・終了しておく。
+    func cleanupOrphanedSessions() {
+        // 監視中は正当なセッションなので触らない。
+        guard state == .idle else { return }
+        workout.endOrphanedSession()
+        runtimeSession.stop()
+    }
+
     // MARK: - バインディング
 
     private func bindHealthKitHeartRateStream() {
