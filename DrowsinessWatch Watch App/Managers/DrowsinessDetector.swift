@@ -83,6 +83,9 @@ final class DrowsinessDetector: ObservableObject {
     private let minSamplesForBaseline = 3
     /// 直近基準値モード用のウィンドウ (約 1 分 ≒ 12 サンプル @5 秒間隔)。
     private let shortBaselineWindow = 12
+    /// 評価間隔の上限。省電力の間引きを何重にかけても、居眠り判定の
+    /// 見逃しに繋がらないようこれ以上は間延びさせない。
+    private let maxEvaluationInterval: TimeInterval = 10.0
 
     // MARK: - イニシャライザ
 
@@ -408,6 +411,7 @@ final class DrowsinessDetector: ObservableObject {
     ///  - 上記をバッテリー < 20% でさらに 2 倍間引き (motion は下限 3Hz)。
     ///  - 消灯モード有効時、画面が見えていなければさらに 1.5 倍間引き
     ///    (motion は下限 2Hz)。ただし居眠り検知中は間引かない。
+    ///  - 間引きを何重にかけても評価間隔は `maxEvaluationInterval` (10 秒) が上限。
     private func desiredProfile() -> (evaluationInterval: TimeInterval, motionSampleRateHz: Double) {
         let batteryLow = isBatteryLow()
         // 発報中は画面を見ていなくても最速で回し続け、離脱検知を優先する。
@@ -447,7 +451,7 @@ final class DrowsinessDetector: ObservableObject {
         batteryLow: Bool
     ) -> (evaluationInterval: TimeInterval, motionSampleRateHz: Double) {
         guard batteryLow else { return (base.0, base.1) }
-        let interval = min(30.0, base.0 * 2.0)
+        let interval = min(maxEvaluationInterval, base.0 * 2.0)
         let motionHz = max(3.0, base.1 / 2.0)
         return (interval, motionHz)
     }
@@ -460,7 +464,7 @@ final class DrowsinessDetector: ObservableObject {
         isDimmed: Bool
     ) -> (evaluationInterval: TimeInterval, motionSampleRateHz: Double) {
         guard isDimmed else { return (base.0, base.1) }
-        let interval = min(30.0, base.0 * 1.5)
+        let interval = min(maxEvaluationInterval, base.0 * 1.5)
         let motionHz = max(2.0, base.1 / 2.0)
         return (interval, motionHz)
     }
