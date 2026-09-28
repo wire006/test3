@@ -15,42 +15,49 @@ struct ContentView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
+                primaryActionButton
+
                 statusBadge
 
                 metricsSection
 
                 Divider()
 
-                heartRateDropThresholdSection
+                Group {
+                    heartRateDropThresholdSection
 
-                stillnessThresholdSection
+                    stillnessThresholdSection
 
-                triggerSecondsSection
+                    triggerSecondsSection
 
-                andModeSection
+                    andModeSection
 
-                orModeSection
+                    orModeSection
 
-                fixedBaselineSection
+                    fixedBaselineSection
 
-                powerSavingSection
+                    powerSavingSection
 
-                primaryActionButton
+                    dimmedModeSection
 
-                NavigationLink(destination: HistoryView(store: history)) {
-                    Label("履歴", systemImage: "list.bullet.rectangle")
-                        .font(.caption)
-                        .frame(maxWidth: .infinity)
+                    shortBaselineSection
+
+                    NavigationLink(destination: HistoryView(store: history)) {
+                        Label("履歴", systemImage: "list.bullet.rectangle")
+                            .font(.caption)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+
+                    backgroundModeSection
+
+                    debugHeartRateSection
                 }
-                .buttonStyle(.bordered)
-
-                backgroundModeSection
-
-                debugHeartRateSection
+                .disabled(detector.state != .idle)
             }
             .padding(.horizontal, 4)
         }
-        .navigationTitle("居眠り防止")
+        .navigationTitle("眠り防止")
     }
 
     // MARK: - Subviews
@@ -79,7 +86,9 @@ struct ContentView: View {
                 value: detector.heartRate.map { String(format: "%.0f bpm", $0) } ?? "--"
             )
             metricRow(
-                label: settings.fixedBaselineEnabled ? "基準 (FIXED)" : "基準",
+                label: settings.fixedBaselineEnabled ? "基準 (FIXED)"
+                     : settings.shortBaselineEnabled ? "基準 (SHORT)"
+                     : "基準",
                 value: detector.baselineHeartRate.map { String(format: "%.0f bpm", $0) } ?? "--"
             )
             metricRow(
@@ -255,6 +264,41 @@ struct ContentView: View {
         }
     }
 
+    /// 消灯モード: 画面が表示されていない間 (時計画面表示中・手首下げなど) は
+    /// 判定頻度をさらに落として省電力化する。振動アラートは画面が見えていなくても
+    /// 鳴るため、見逃しに繋がらない。
+    private var dimmedModeSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: $settings.dimmedModeEnabled) {
+                Text("消灯モード")
+                    .font(.caption2)
+            }
+
+            Text(settings.dimmedModeEnabled
+                 ? "画面非表示中は評価間隔 1.5 倍・モーション半減でさらに節電"
+                 : "画面を見ていない間も通常のケイデンスで監視")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// 直近基準値モード: ベースラインを直近約 1 分間の心拍平均で計算する。
+    /// 全履歴 (約 10 分) より短い区間で追従するため、体調変動への反応が速い。
+    private var shortBaselineSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: $settings.shortBaselineEnabled) {
+                Text("直近基準値")
+                    .font(.caption2)
+            }
+
+            Text(settings.shortBaselineEnabled
+                 ? "直近約 1 分の平均を基準値に使用"
+                 : "直近約 10 分の平均を基準値に使用")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     /// バックグラウンド実行方式を選ぶセクション。
     /// 監視中は誤って切り替わらないよう無効化する。
     private var backgroundModeSection: some View {
@@ -268,7 +312,6 @@ struct ContentView: View {
                     .font(.caption2)
             }
             .pickerStyle(.navigationLink)
-            .disabled(detector.state != .idle)
 
             Text(settings.backgroundMode.summary)
                 .font(.caption2)

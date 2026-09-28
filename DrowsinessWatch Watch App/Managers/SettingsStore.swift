@@ -64,6 +64,8 @@ final class SettingsStore: ObservableObject {
         static let fixedBaselineEnabled = "settings.fixedBaselineEnabled"
         static let fixedBaselineValue = "settings.fixedBaselineValue"
         static let powerSavingEnabled = "settings.powerSavingEnabled"
+        static let shortBaselineEnabled = "settings.shortBaselineEnabled"
+        static let dimmedModeEnabled = "settings.dimmedModeEnabled"
     }
 
     private let defaults: UserDefaults
@@ -205,6 +207,21 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(powerSavingEnabled, forKey: Keys.powerSavingEnabled) }
     }
 
+    /// 直近基準値モード: ベースラインを全履歴 (~10 分) ではなく
+    /// 直近約 1 分間の心拍平均で算出する。体調変動への追従が速くなるが、
+    /// 外れ値の影響を受けやすくなる。基準値固定モードが ON のときは無効。
+    @Published var shortBaselineEnabled: Bool {
+        didSet { defaults.set(shortBaselineEnabled, forKey: Keys.shortBaselineEnabled) }
+    }
+
+    /// 消灯モード: 画面が表示されていない間 (時計画面表示中・手首下げ・
+    /// 他アプリ表示中など) は、既に見ていないので判定頻度をさらに落として
+    /// 省電力化する。画面表示に戻ると通常のケイデンスに即座に復帰する。
+    /// アラートの振動自体は画面を見ていなくても鳴るため、安全性は損なわない。
+    @Published var dimmedModeEnabled: Bool {
+        didSet { defaults.set(dimmedModeEnabled, forKey: Keys.dimmedModeEnabled) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
@@ -288,6 +305,8 @@ final class SettingsStore: ObservableObject {
         let storedFixed = defaults.integer(forKey: Keys.fixedBaselineValue)
         self.fixedBaselineValue = max(60, min(100, storedFixed == 0 ? 75 : storedFixed))
         self.powerSavingEnabled = defaults.bool(forKey: Keys.powerSavingEnabled)
+        self.shortBaselineEnabled = defaults.bool(forKey: Keys.shortBaselineEnabled)
+        self.dimmedModeEnabled = defaults.bool(forKey: Keys.dimmedModeEnabled)
     }
 
     /// 累積発報回数をリセットする。
