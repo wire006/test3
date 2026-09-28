@@ -51,6 +51,8 @@ struct DrowsinessWatchApp: App {
             if newPhase == .active {
                 detector.cleanupOrphanedSessions()
             }
+            // 消灯モード用: 画面が前面表示されているかを検知エンジンに伝える。
+            detector.setScreenActive(newPhase == .active)
         }
     }
 }

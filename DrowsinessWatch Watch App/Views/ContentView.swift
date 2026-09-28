@@ -38,6 +38,8 @@ struct ContentView: View {
 
                     powerSavingSection
 
+                    dimmedModeSection
+
                     shortBaselineSection
 
                     NavigationLink(destination: HistoryView(store: history)) {
@@ -55,7 +57,7 @@ struct ContentView: View {
             }
             .padding(.horizontal, 4)
         }
-        .navigationTitle("居眠り防止")
+        .navigationTitle("眠り防止")
     }
 
     // MARK: - Subviews
@@ -257,6 +259,24 @@ struct ContentView: View {
             Text(settings.powerSavingEnabled
                  ? "常時低電力稼働 (評価 2 倍・モーション半減)"
                  : "バッテリー 20% 以下で自動低電力")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// 消灯モード: 画面が表示されていない間 (時計画面表示中・手首下げなど) は
+    /// 判定頻度をさらに落として省電力化する。振動アラートは画面が見えていなくても
+    /// 鳴るため、見逃しに繋がらない。
+    private var dimmedModeSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: $settings.dimmedModeEnabled) {
+                Text("消灯モード")
+                    .font(.caption2)
+            }
+
+            Text(settings.dimmedModeEnabled
+                 ? "画面非表示中は評価間隔 1.5 倍・モーション半減でさらに節電"
+                 : "画面を見ていない間も通常のケイデンスで監視")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }

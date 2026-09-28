@@ -43,6 +43,9 @@ final class DrowsinessDetector: ObservableObject {
     @Published private(set) var consecutiveDrowsySeconds: Int = 0
     /// 現在のセッションでの発報回数。
     @Published var sessionAlertCount: Int = 0
+    /// 画面が前面表示されているか (消灯モードの判定に使う)。
+    /// App 側の scenePhase から `setScreenActive` 経由で更新される。
+    @Published private(set) var isScreenActive: Bool = true
 
     // MARK: - 依存コンポーネント
 
@@ -169,6 +172,19 @@ final class DrowsinessDetector: ObservableObject {
         drowsyConditionStartedAt = nil
         consecutiveDrowsySeconds = 0
         state = .idle
+    }
+
+    /// App 側の scenePhase 変化を伝える。画面が見えていない (非 active) 間は
+    /// 消灯モードが有効なら判定ケイデンスをさらに間引く。振動アラート自体は
+    /// 画面が見えていなくても鳴るため、見逃しには繋がらない。
+    func setScreenActive(_ active: Bool) {
+        guard isScreenActive != active else { return }
+        isScreenActive = active
+        // 画面表示状態が変わった直後は次回の評価待ちにせず、即座にケイデンスを
+        // 反映する (省電力からの復帰を素早くするため)。
+        if state != .idle {
+            adaptCadence()
+        }
     }
 
     /// アプリ起動時・フォアグラウンド復帰時に呼ぶ後始末。
@@ -390,8 +406,12 @@ final class DrowsinessDetector: ObservableObject {
     ///  - やや低下 (HR >= base * 0.95)                     → 2s  / 10Hz
     ///  - 居眠り圏 or 判定中                              → 1s  / 10Hz
     ///  - 上記をバッテリー < 20% でさらに 2 倍間引き (motion は下限 3Hz)。
+    ///  - 消灯モード有効時、画面が見えていなければさらに 1.5 倍間引き
+    ///    (motion は下限 2Hz)。ただし居眠り検知中は間引かない。
     private func desiredProfile() -> (evaluationInterval: TimeInterval, motionSampleRateHz: Double) {
         let batteryLow = isBatteryLow()
+        // 発報中は画面を見ていなくても最速で回し続け、離脱検知を優先する。
+        let dimmedActive = state != .drowsy && settings.dimmedModeEnabled && !isScreenActive
 
         // 居眠り検知中は最細で回す (発報後の離脱検知も兼ねる)。
         if state == .drowsy {
@@ -400,7 +420,7 @@ final class DrowsinessDetector: ObservableObject {
 
         guard let hr = heartRate else {
             // まだ心拍が取れない初期段階は中庸。
-            return applyBattery(base: (2.0, 10.0), batteryLow: batteryLow)
+            return applyDimmed(base: applyBattery(base: (2.0, 10.0), batteryLow: batteryLow), isDimmed: dimmedActive)
         }
 
         let base = baselineHeartRate
@@ -418,7 +438,7 @@ final class DrowsinessDetector: ObservableObject {
         default:
             chosen = (1.0, 10.0)   // 居眠り圏
         }
-        return applyBattery(base: chosen, batteryLow: batteryLow)
+        return applyDimmed(base: applyBattery(base: chosen, batteryLow: batteryLow), isDimmed: dimmedActive)
     }
 
     /// バッテリー低下時の追加間引き。
@@ -429,6 +449,19 @@ final class DrowsinessDetector: ObservableObject {
         guard batteryLow else { return (base.0, base.1) }
         let interval = min(30.0, base.0 * 2.0)
         let motionHz = max(3.0, base.1 / 2.0)
+        return (interval, motionHz)
+    }
+
+    /// 消灯モード有効時、画面が見えていない間の追加間引き。
+    /// バッテリー間引きより緩め (motion 下限 2Hz) にして、
+    /// 画面復帰後の判定再開が極端に遅れないようにする。
+    private func applyDimmed(
+        base: (TimeInterval, Double),
+        isDimmed: Bool
+    ) -> (evaluationInterval: TimeInterval, motionSampleRateHz: Double) {
+        guard isDimmed else { return (base.0, base.1) }
+        let interval = min(30.0, base.0 * 1.5)
+        let motionHz = max(2.0, base.1 / 2.0)
         return (interval, motionHz)
     }
 
